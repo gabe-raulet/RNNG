@@ -253,7 +253,7 @@ Index PointContainer<Atom_>::read_seqs(const char *fname, MPI_Comm comm)
 
         for (Index i = 0; i < point_count; ++i)
         {
-            const PointType& p = allpoints[i];
+            const Point<Atom>& p = allpoints[i];
 
             alldataoffsets.push_back(alldata.size());
             alldata.insert(alldata.end(), p.begin(), p.end());
