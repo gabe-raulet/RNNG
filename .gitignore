@@ -1,0 +1,8 @@
+*.so
+*.dSYM
+*.mtx
+*.kmers
+*.fvecs
+build
+datasets
+__pycache__
