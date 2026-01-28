@@ -50,10 +50,16 @@ class PointContainer
         PointContainer(const AtomVector& atoms, Index size, Index dim);
         PointContainer(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);
 
-        Index num_points() const { return points.size(); }
-        Index num_atoms() const { return std::accumulate(points.begin(), points.end(), (Index)0, [](const Index& lhs, const Point<Atom>& rhs) { return lhs + rhs.size(); });  }
+        Index num_points() const { return ids.size(); }
+        Index num_atoms() const { return data.size(); }
 
-        Point<Atom> operator[](Index i) const { return points[i]; }
+        Point<Atom> operator[](Index i) const
+        {
+            auto first = data.begin() + offsets[i];
+            auto last = data.begin() + offsets[i+1];
+
+            return Point<Atom>(first, last, ids[i]);
+        }
 
         Index read_fvecs(const char *fname);
         Index read_seqs(const char *fname);
@@ -63,7 +69,8 @@ class PointContainer
 
     private:
 
-        std::vector<Point<Atom>> points;
+        AtomVector data;
+        IndexVector offsets, ids;
 
         void init(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
         void init(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);

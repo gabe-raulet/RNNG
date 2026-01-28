@@ -33,17 +33,20 @@ void PointContainer<Atom_>::init(const AtomVector& atoms, const IndexVector& siz
     Index point_count = sizes.size();
     assert((point_count == indices.size()));
 
-    auto first = atoms.cbegin();
+    data = atoms;
+    ids = indices;
 
-    points.clear();
-    points.reserve(point_count);
+    offsets.clear();
+    offsets.reserve(point_count+1);
+    Index disp = 0;
 
     for (Index i = 0; i < point_count; ++i)
     {
-        auto last = first + sizes[i];
-        points.emplace_back(first, last, indices[i]);
-        first = last;
+        offsets.push_back(disp);
+        disp += sizes[i];
     }
+
+    offsets.push_back(disp);
 }
 
 template <class Atom_>
@@ -52,16 +55,18 @@ void PointContainer<Atom_>::init(const AtomVector& atoms, Index size, Index dim,
     assert((atoms.size() == size*dim));
     assert((indices.size() == size));
 
-    auto first = atoms.cbegin();
+    data = atoms;
+    ids = indices;
 
-    points.clear();
-    points.reserve(size);
+    offsets.clear();
+    offsets.resize(size+1);
 
-    for (Index i = 0; i < size; ++i)
+    Index disp = 0;
+
+    for (Index i = 0; i <= size; ++i)
     {
-        auto last = first + dim;
-        points.emplace_back(first, last, indices[i]);
-        first = last;
+        offsets[i] = disp;
+        disp += dim;
     }
 }
 
@@ -91,9 +96,12 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname)
     total = filesize / record_size;
 
     p.resize(record_size);
-    points.clear();
-    points.reserve(total);
-    AtomVector atoms(d);
+
+    data.resize(total*d);
+    offsets.resize(total+1);
+    ids.resize(total);
+
+    Index disp = 0;
 
     for (size_t i = 0; i < total; ++i)
     {
@@ -105,13 +113,17 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname)
         int dt;
         std::memcpy(&dt, ds, sizeof(int)); assert((dt == d));
 
-        char *dest = (char*)(&atoms[0]);
+        char *dest = (char*)(&data[i*d]);
         std::memcpy(dest, ps, point_size);
 
-        points.emplace_back(atoms.begin(), atoms.end(), i);
+        offsets[i] = disp;
+        ids[i] = i;
+        disp += d;
     }
 
     is.close();
+
+    offsets[total] = disp;
 
     return total;
 }
@@ -124,10 +136,13 @@ Index PointContainer<Atom_>::read_seqs(const char *fname)
     std::ifstream is;
     std::string line;
 
-    points.clear();
     Index id = 0;
 
     is.open(fname, std::ios::in);
+
+    offsets.clear();
+    ids.clear();
+    data.clear();
 
     while (std::getline(is, line))
     {
@@ -137,12 +152,17 @@ Index PointContainer<Atom_>::read_seqs(const char *fname)
         if (line.empty())
             continue;
 
-        points.emplace_back(line.begin(), line.end(), id++);
+        offsets.push_back(data.size());
+        ids.push_back(id++);
+
+        std::copy(line.begin(), line.end(), std::back_inserter(data));
     }
+
+    offsets.push_back(data.size());
 
     is.close();
 
-    return points.size();
+    return id;
 }
 
 template <class Atom_>
