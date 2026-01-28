@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "point.h"
 #include "search.h"
+#include "graph.h"
 
 MPI_Comm comm;
 int myrank, nprocs;
@@ -205,17 +206,52 @@ int main_mpi(int argc, char *argv[])
 
     mytime += MPI_Wtime();
 
-    Index my_num_edges = myedges.size();
-    Index num_edges = 0;
-
-    MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
-
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors\n", time);
         fflush(stderr);
     }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+
+    Graph graph(myedges, num_points);
+    graph.redistribute_edges(comm);
+
+    mytime += MPI_Wtime();
+    mytottime += MPI_Wtime();
+
+    if (verbosity >= 1)
+    {
+        Index num_edges;
+        Index my_num_edges = graph.num_edges();
+
+        MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+        fflush(stderr);
+    }
+
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
+        graph.write_file(outfile, comm);
+        mytime += MPI_Wtime();
+
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) fprintf(stderr, "[time=%.3f] wrote edges to file '%s'\n", time, outfile);
+            fflush(stderr);
+        }
+    }
+
+    MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
+    fflush(stderr);
 
     return 0;
 }
