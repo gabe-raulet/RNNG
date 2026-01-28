@@ -188,10 +188,9 @@ int main_mpi(int argc, char *argv[])
 
         for (Index i = 0; i < targsize; ++i)
         {
-            auto first = sendpts.begin() + sendoffsets[i];
-            auto last = sendpts.begin() + sendoffsets[i+1];
-
-            Point<Atom> query(first, last, sendids[i]);
+            const Atom *mem = &sendpts[sendoffsets[i]];
+            Index dim = sendoffsets[i+1]-sendoffsets[i];
+            Point<Atom> query(mem, dim, sendids[i]);
 
             search.radius_query(mypoints, distance, query, radius, functor);
         }

@@ -12,27 +12,21 @@ class Point
         using AtomVector = std::vector<Atom>;
         using AtomIter = typename AtomVector::const_iterator;
 
-        Point(const AtomVector& data) : data(data), index(-1) {}
-        Point(const AtomVector& data, Index index) : data(data), index(index) {}
-
-        Point(const Atom *mem, Index dim) : data(mem, mem+dim), index(-1) {}
-        Point(const Atom *mem, Index dim, Index index) : data(mem, mem+dim), index(index) {}
-
-        template <class Iter> Point(Iter first, Iter last) : data(first, last), index(-1) {}
-        template <class Iter> Point(Iter first, Iter last, Index index) : data(first, last), index(index) {}
+        Point(const Atom *mem, Index dim) : mem(mem), dim(dim), index(-1) {}
+        Point(const Atom *mem, Index dim, Index index) : mem(mem), dim(dim), index(index) {}
 
         Index id() const { return index; }
-        Index size() const { return data.size(); }
-        Atom operator[](Index i) const { return data[i]; }
-        explicit operator const Atom *() const { return data.data(); }
+        Index size() const { return dim; }
+        Atom operator[](Index i) const { return mem[i]; }
+        explicit operator const Atom *() const { return mem; }
 
-        AtomIter begin() const { return data.cbegin(); }
-        AtomIter end() const { return data.cend(); }
+        const Atom* begin() const { return mem; }
+        const Atom* end() const { return mem+dim; }
 
     private:
 
-        AtomVector data;
-        Index index;
+        const Atom *mem;
+        Index dim, index;
 };
 
 template <class Atom_>
@@ -53,13 +47,7 @@ class PointContainer
         Index num_points() const { return ids.size(); }
         Index num_atoms() const { return data.size(); }
 
-        Point<Atom> operator[](Index i) const
-        {
-            auto first = data.begin() + offsets[i];
-            auto last = data.begin() + offsets[i+1];
-
-            return Point<Atom>(first, last, ids[i]);
-        }
+        Point<Atom> operator[](Index i) const { return Point<Atom>(mem(i), size(i), id(i)); }
 
         Index read_fvecs(const char *fname);
         Index read_seqs(const char *fname);
@@ -74,6 +62,10 @@ class PointContainer
 
         void init(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
         void init(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);
+
+        inline const Atom* mem(Index i) const { return &data[offsets[i]]; }
+        inline Index size(Index i) const { return offsets[i+1]-offsets[i]; }
+        inline Index id(Index i) const { return ids[i]; }
 };
 
 #include "point.hpp"
