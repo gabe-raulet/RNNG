@@ -69,6 +69,7 @@ int main_mpi(int argc, char *argv[])
 
     Index num_points, mysize, myoffset;
     PointContainer<Atom> mypoints;
+    Distance distance;
 
     MPI_Barrier(comm);
     mytottime = -MPI_Wtime();
@@ -88,55 +89,133 @@ int main_mpi(int argc, char *argv[])
         fflush(stderr);
     }
 
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+
+    CoverTree search(cover, leaf_size);
+    search.build(mypoints, distance);
+
+    mytime += MPI_Wtime();
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) fprintf(stderr, "[time=%.3f] built cover tree\n", time);
+        fflush(stderr);
+    }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+
+    using Edge = std::tuple<Index, Index, Real>;
+    using EdgeVector = std::vector<Edge>;
+
+    EdgeVector myedges;
+
+    auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
+    {
+        myedges.emplace_back(q.id(), p.id(), dist);
+    };
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
     mysize = mypoints.num_points();
-    myoffset = mypoints[0].id();
 
-    printf("[rank=%d,mysize=%lld,myoffset=%lld,myatoms=%lld,totsize=%lld]\n", myrank, mysize, myoffset, mypoints.num_atoms(), num_points);
+    int recvrank = (myrank+1)%nprocs;
+    int sendrank = (myrank-1+nprocs)%nprocs;
 
-    //MPI_Barrier(comm);
-    //mytime = -MPI_Wtime();
+    int sendtarg = myrank;
+    int recvtarg;
 
-    //CoverTree search(cover, leaf_size);
-    //search.build(points, distance);
+    int sendcount, sendcount_atoms;
+    int recvcount, recvcount_atoms;
 
-    //mytime += MPI_Wtime();
+    using AtomVector = std::vector<Atom>;
 
-    //if (verbosity >= 1)
-    //{
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //    if (!myrank) fprintf(stderr, "[time=%.3f] built cover tree\n", time);
-    //    fflush(stderr);
-    //}
+    AtomVector sendpts;
+    AtomVector recvpts;
 
-    //using Edge = std::tuple<Index, Index, Real>;
-    //using EdgeVector = std::vector<Edge>;
+    IndexVector sendids;
+    IndexVector recvids;
 
-    //EdgeVector graph;
+    IndexVector sendoffsets;
+    IndexVector recvoffsets;
 
-    //auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
-    //{
-    //    graph.emplace_back(q.id(), p.id(), dist);
-    //};
+    for (Index i = 0; i < mysize; ++i)
+    {
+        Point<Atom> p = mypoints[i];
+        sendids.push_back(p.id());
+        sendoffsets.push_back(sendpts.size());
+        std::copy(p.begin(), p.end(), std::back_inserter(sendpts));
+    }
 
-    //MPI_Barrier(comm);
-    //mytime = -MPI_Wtime();
+    sendoffsets.push_back(sendpts.size());
 
-    //for (Index i = 0; i < num_points; ++i)
-    //{
-    //    search.radius_query(points, distance, points[i], radius, functor);
-    //}
+    int sendcount_buf[2], recvcount_buf[2];
+    MPI_Request reqs[6];
 
-    //mytime += MPI_Wtime();
-    //mytottime += MPI_Wtime();
+    for (int step = 0; step < nprocs; ++step)
+    {
+        recvtarg = (sendtarg+1)%nprocs;
+        sendcount = sendids.size();
+        sendcount_atoms = sendpts.size();
 
-    //Index num_edges = graph.size();
+        sendcount_buf[0] = sendcount;
+        sendcount_buf[1] = sendcount_atoms;
 
-    //if (verbosity >= 1)
-    //{
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //    if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
-    //    fflush(stderr);
-    //}
+        MPI_Irecv(recvcount_buf, 2, MPI_INT, recvrank, myrank,   comm, &reqs[0]);
+        MPI_Isend(sendcount_buf, 2, MPI_INT, sendrank, sendrank, comm, &reqs[1]);
+        MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
+
+        recvcount = recvcount_buf[0];
+        recvcount_atoms = recvcount_buf[1];
+
+        recvpts.resize(recvcount_atoms);
+        recvids.resize(recvcount);
+        recvoffsets.resize(recvcount+1);
+
+        MPI_Irecv(recvpts.data(), recvcount_atoms, MPI_ATOM, recvrank, myrank+nprocs, comm, &reqs[0]);
+        MPI_Isend(sendpts.data(), sendcount_atoms, MPI_ATOM, sendrank, sendrank+nprocs, comm, &reqs[1]);
+
+        MPI_Irecv(recvids.data(), recvcount, MPI_INDEX, recvrank, myrank+2*nprocs, comm, &reqs[2]);
+        MPI_Isend(sendids.data(), sendcount, MPI_INDEX, sendrank, sendrank+2*nprocs, comm, &reqs[3]);
+
+        MPI_Irecv(recvoffsets.data(), recvcount+1, MPI_INDEX, recvrank, myrank+3*nprocs, comm, &reqs[4]);
+        MPI_Isend(sendoffsets.data(), sendcount+1, MPI_INDEX, sendrank, sendrank+3*nprocs, comm, &reqs[5]);
+
+        Index targsize = sendcount;
+
+        for (Index i = 0; i < targsize; ++i)
+        {
+            auto first = sendpts.begin() + sendoffsets[i];
+            auto last = sendpts.begin() + sendoffsets[i+1];
+
+            Point<Atom> query(first, last, sendids[i]);
+
+            search.radius_query(mypoints, distance, query, radius, functor);
+        }
+
+        MPI_Waitall(6, reqs, MPI_STATUSES_IGNORE);
+
+        sendtarg = recvtarg;
+        sendpts.swap(recvpts);
+        sendids.swap(recvids);
+        sendoffsets.swap(recvoffsets);
+    }
+
+    mytime += MPI_Wtime();
+
+    Index my_num_edges = myedges.size();
+    Index num_edges = 0;
+
+    MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+        fflush(stderr);
+    }
 
     return 0;
 }
