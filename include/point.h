@@ -59,6 +59,9 @@ class PointContainer
         Index read_fvecs(const char *fname);
         Index read_seqs(const char *fname);
 
+        Index read_fvecs(const char *fname, MPI_Comm comm);
+        Index read_seqs(const char *fname, MPI_Comm comm);
+
     private:
 
         std::vector<PointType> points;
