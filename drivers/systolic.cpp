@@ -118,89 +118,32 @@ int main_mpi(int argc, char *argv[])
         myedges.emplace_back(q.id(), p.id(), dist);
     };
 
-    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
-
     mysize = mypoints.num_points();
 
     int recvrank = (myrank+1)%nprocs;
     int sendrank = (myrank-1+nprocs)%nprocs;
 
-    int sendtarg = myrank;
-    int recvtarg;
+    PointContainer<Atom> sendbuf = mypoints;
+    PointContainer<Atom> recvbuf;
 
-    int sendcount, sendcount_atoms;
-    int recvcount, recvcount_atoms;
+    using SendrecvRequest = typename PointContainer<Atom>::SendrecvRequest;
 
-    using AtomVector = std::vector<Atom>;
-
-    AtomVector sendpts;
-    AtomVector recvpts;
-
-    IndexVector sendids;
-    IndexVector recvids;
-
-    IndexVector sendoffsets;
-    IndexVector recvoffsets;
-
-    for (Index i = 0; i < mysize; ++i)
-    {
-        Point<Atom> p = mypoints[i];
-        sendids.push_back(p.id());
-        sendoffsets.push_back(sendpts.size());
-        std::copy(p.begin(), p.end(), std::back_inserter(sendpts));
-    }
-
-    sendoffsets.push_back(sendpts.size());
-
-    int sendcount_buf[2], recvcount_buf[2];
-    MPI_Request reqs[6];
+    SendrecvRequest request;
 
     for (int step = 0; step < nprocs; ++step)
     {
-        recvtarg = (sendtarg+1)%nprocs;
-        sendcount = sendids.size();
-        sendcount_atoms = sendpts.size();
+        sendbuf.sendrecv(recvbuf, recvrank, sendrank, comm, request);
 
-        sendcount_buf[0] = sendcount;
-        sendcount_buf[1] = sendcount_atoms;
-
-        MPI_Irecv(recvcount_buf, 2, MPI_INT, recvrank, myrank,   comm, &reqs[0]);
-        MPI_Isend(sendcount_buf, 2, MPI_INT, sendrank, sendrank, comm, &reqs[1]);
-        MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
-
-        recvcount = recvcount_buf[0];
-        recvcount_atoms = recvcount_buf[1];
-
-        recvpts.resize(recvcount_atoms);
-        recvids.resize(recvcount);
-        recvoffsets.resize(recvcount+1);
-
-        MPI_Irecv(recvpts.data(), recvcount_atoms, MPI_ATOM, recvrank, myrank+nprocs, comm, &reqs[0]);
-        MPI_Isend(sendpts.data(), sendcount_atoms, MPI_ATOM, sendrank, sendrank+nprocs, comm, &reqs[1]);
-
-        MPI_Irecv(recvids.data(), recvcount, MPI_INDEX, recvrank, myrank+2*nprocs, comm, &reqs[2]);
-        MPI_Isend(sendids.data(), sendcount, MPI_INDEX, sendrank, sendrank+2*nprocs, comm, &reqs[3]);
-
-        MPI_Irecv(recvoffsets.data(), recvcount+1, MPI_INDEX, recvrank, myrank+3*nprocs, comm, &reqs[4]);
-        MPI_Isend(sendoffsets.data(), sendcount+1, MPI_INDEX, sendrank, sendrank+3*nprocs, comm, &reqs[5]);
-
-        Index targsize = sendcount;
+        Index targsize = sendbuf.num_points();
 
         for (Index i = 0; i < targsize; ++i)
         {
-            const Atom *mem = &sendpts[sendoffsets[i]];
-            Index dim = sendoffsets[i+1]-sendoffsets[i];
-            Point<Atom> query(mem, dim, sendids[i]);
-
-            search.radius_query(mypoints, distance, query, radius, functor);
+            search.radius_query(mypoints, distance, sendbuf[i], radius, functor);
         }
 
-        MPI_Waitall(6, reqs, MPI_STATUSES_IGNORE);
+        request.wait();
 
-        sendtarg = recvtarg;
-        sendpts.swap(recvpts);
-        sendids.swap(recvids);
-        sendoffsets.swap(recvoffsets);
+        sendbuf.swap(recvbuf);
     }
 
     mytime += MPI_Wtime();

@@ -55,6 +55,15 @@ class PointContainer
         Index read_fvecs(const char *fname, MPI_Comm comm);
         Index read_seqs(const char *fname, MPI_Comm comm);
 
+        struct SendrecvRequest
+        {
+            MPI_Request reqs[6];
+            void wait() { MPI_Waitall(6, reqs, MPI_STATUSES_IGNORE); }
+        };
+
+        void sendrecv(PointContainer& recvbuf, int recvrank, int sendrank, MPI_Comm comm, SendrecvRequest& req);
+        void swap(PointContainer& other);
+
     private:
 
         AtomVector data;

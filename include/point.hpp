@@ -326,3 +326,61 @@ Index PointContainer<Atom_>::read_seqs(const char *fname, MPI_Comm comm)
 
     return point_count;
 }
+
+template <class Atom_>
+void PointContainer<Atom_>::sendrecv(PointContainer& recvbuf, int recvrank, int sendrank, MPI_Comm comm, SendrecvRequest& req)
+{
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    int sendcount_buf[2], recvcount_buf[2];
+    int sendcount, sendcount_atoms;
+    int recvcount, recvcount_atoms;
+
+    sendcount = num_points();
+    sendcount_atoms = num_atoms();
+
+    sendcount_buf[0] = sendcount;
+    sendcount_buf[1] = sendcount_atoms;
+
+    MPI_Request *reqs = req.reqs;
+
+    MPI_Irecv(recvcount_buf, 2, MPI_INT, recvrank, myrank,   comm, &reqs[0]);
+    MPI_Isend(sendcount_buf, 2, MPI_INT, sendrank, sendrank, comm, &reqs[1]);
+    MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
+
+    recvcount = recvcount_buf[0];
+    recvcount_atoms = recvcount_buf[1];
+
+    AtomVector& senddata = data;
+    IndexVector& sendids = ids;
+    IndexVector& sendoffsets = offsets;
+
+    AtomVector& recvdata = recvbuf.data;
+    IndexVector& recvids = recvbuf.ids;
+    IndexVector& recvoffsets = recvbuf.offsets;
+
+    recvdata.resize(recvcount_atoms);
+    recvids.resize(recvcount);
+    recvoffsets.resize(recvcount+1);
+
+    MPI_Irecv(recvdata.data(), recvcount_atoms, MPI_ATOM, recvrank, myrank+nprocs, comm, &reqs[0]);
+    MPI_Isend(senddata.data(), sendcount_atoms, MPI_ATOM, sendrank, sendrank+nprocs, comm, &reqs[1]);
+
+    MPI_Irecv(recvids.data(), recvcount, MPI_INDEX, recvrank, myrank+2*nprocs, comm, &reqs[2]);
+    MPI_Isend(sendids.data(), sendcount, MPI_INDEX, sendrank, sendrank+2*nprocs, comm, &reqs[3]);
+
+    MPI_Irecv(recvoffsets.data(), recvcount+1, MPI_INDEX, recvrank, myrank+3*nprocs, comm, &reqs[4]);
+    MPI_Isend(sendoffsets.data(), sendcount+1, MPI_INDEX, sendrank, sendrank+3*nprocs, comm, &reqs[5]);
+}
+
+template <class Atom_>
+void PointContainer<Atom_>::swap(PointContainer& other)
+{
+    std::swap(data, other.data);
+    std::swap(offsets, other.offsets);
+    std::swap(ids, other.ids);
+}
