@@ -20,6 +20,7 @@ int myrank, nprocs;
 Real radius = -1;
 const char *infile = NULL;
 const char *outfile = NULL;
+const char *metric = "l2";
 
 Real cover = 1.5;
 Index leaf_size = 10;
@@ -31,37 +32,52 @@ struct L2Distance
     Real operator()(const Point<Atom>& p, const Point<Atom>& q) const;
 };
 
-void parse_cmdline(int argc, char *argv[]);
+template <class Atom>
+struct EditDistance
+{
+    Real operator()(const Point<Atom>& p, const Point<Atom>& q) const;
+};
+
+template <class Atom, class Distance>
 int main_mpi(int argc, char *argv[]);
+
+void parse_cmdline(int argc, char *argv[]);
 int main(int argc, char *argv[])
 {
+    int err;
     MPI_Init(&argc, &argv);
     MPI_Comm_dup(MPI_COMM_WORLD, &comm);
     MPI_Comm_rank(comm, &myrank);
     MPI_Comm_size(comm, &nprocs);
     parse_cmdline(argc, argv);
-    int err = main_mpi(argc, argv);
+
+    if (!strcmp(metric, "edit"))
+        err = main_mpi<char, EditDistance<char>>(argc, argv);
+    else if (!strcmp(metric, "l2"))
+        err = main_mpi<float, L2Distance<float>>(argc, argv);
+
     MPI_Comm_free(&comm);
     MPI_Finalize();
     return err;
 }
 
+template <class Atom, class Distance>
 int main_mpi(int argc, char *argv[])
 {
-    using Atom = float;
-
     double mytime, time;
     double mytottime, tottime;
 
-    Index num_points;
-    PointContainer<Atom> points;
-    L2Distance<Atom> distance;
+    Index num_points, mysize, myoffset;
+    PointContainer<Atom> mypoints;
 
     MPI_Barrier(comm);
     mytottime = -MPI_Wtime();
     mytime = -MPI_Wtime();
 
-    num_points = points.read_fvecs(infile);
+    if (!strcmp(metric, "edit"))
+        num_points = mypoints.read_seqs(infile, comm);
+    else if (!strcmp(metric, "l2"))
+        num_points = mypoints.read_fvecs(infile, comm);
 
     mytime += MPI_Wtime();
 
@@ -72,50 +88,55 @@ int main_mpi(int argc, char *argv[])
         fflush(stderr);
     }
 
-    MPI_Barrier(comm);
-    mytime = -MPI_Wtime();
+    mysize = mypoints.num_points();
+    myoffset = mypoints[0].id();
 
-    CoverTree search(cover, leaf_size);
-    search.build(points, distance);
+    printf("[rank=%d,mysize=%lld,myoffset=%lld,myatoms=%lld,totsize=%lld]\n", myrank, mysize, myoffset, mypoints.num_atoms(), num_points);
 
-    mytime += MPI_Wtime();
+    //MPI_Barrier(comm);
+    //mytime = -MPI_Wtime();
 
-    if (verbosity >= 1)
-    {
-        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] built cover tree\n", time);
-        fflush(stderr);
-    }
+    //CoverTree search(cover, leaf_size);
+    //search.build(points, distance);
 
-    using Edge = std::tuple<Index, Index, Real>;
-    using EdgeVector = std::vector<Edge>;
+    //mytime += MPI_Wtime();
 
-    EdgeVector graph;
+    //if (verbosity >= 1)
+    //{
+    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    //    if (!myrank) fprintf(stderr, "[time=%.3f] built cover tree\n", time);
+    //    fflush(stderr);
+    //}
 
-    auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
-    {
-        graph.emplace_back(q.id(), p.id(), dist);
-    };
+    //using Edge = std::tuple<Index, Index, Real>;
+    //using EdgeVector = std::vector<Edge>;
 
-    MPI_Barrier(comm);
-    mytime = -MPI_Wtime();
+    //EdgeVector graph;
 
-    for (Index i = 0; i < num_points; ++i)
-    {
-        search.radius_query(points, distance, points[i], radius, functor);
-    }
+    //auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
+    //{
+    //    graph.emplace_back(q.id(), p.id(), dist);
+    //};
 
-    mytime += MPI_Wtime();
-    mytottime += MPI_Wtime();
+    //MPI_Barrier(comm);
+    //mytime = -MPI_Wtime();
 
-    Index num_edges = graph.size();
+    //for (Index i = 0; i < num_points; ++i)
+    //{
+    //    search.radius_query(points, distance, points[i], radius, functor);
+    //}
 
-    if (verbosity >= 1)
-    {
-        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
-        fflush(stderr);
-    }
+    //mytime += MPI_Wtime();
+    //mytottime += MPI_Wtime();
+
+    //Index num_edges = graph.size();
+
+    //if (verbosity >= 1)
+    //{
+    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    //    if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+    //    fflush(stderr);
+    //}
 
     return 0;
 }
@@ -130,6 +151,7 @@ void parse_cmdline(int argc, char *argv[])
             fprintf(stderr, "Options: -c FLOAT cover tree base [%.2f]\n", cover);
             fprintf(stderr, "         -l INT   leaf size [%lld]\n", leaf_size);
             fprintf(stderr, "         -v INT   verbosity level [%d]\n", verbosity);
+            fprintf(stderr, "         -D STR   metric [%s]\n", metric);
             fprintf(stderr, "         -o FILE  output edge file\n");
             fprintf(stderr, "         -h       help message\n");
         }
@@ -139,7 +161,7 @@ void parse_cmdline(int argc, char *argv[])
     };
 
     int c;
-    while ((c = getopt(argc, argv, "i:r:c:l:v:o:h")) >= 0)
+    while ((c = getopt(argc, argv, "i:r:c:l:v:o:D:h")) >= 0)
     {
 
         if      (c == 'i') infile = optarg;
@@ -147,6 +169,7 @@ void parse_cmdline(int argc, char *argv[])
         else if (c == 'c') cover = atof(optarg);
         else if (c == 'l') leaf_size = atoi(optarg);
         else if (c == 'v') verbosity = atoi(optarg);
+        else if (c == 'D') metric = optarg;
         else if (c == 'o') outfile = optarg;
         else if (c == 'h') usage(0, myrank == 0);
     }
@@ -160,6 +183,12 @@ void parse_cmdline(int argc, char *argv[])
     if (radius < 0)
     {
         if (!myrank) fprintf(stderr, "error: missing radius argument! (-r)\n");
+        usage(1, myrank == 0);
+    }
+
+    if (strcmp(metric, "edit") && strcmp(metric, "l2"))
+    {
+        if (!myrank) fprintf(stderr, "error: invalid metric argument! (-D)\n");
         usage(1, myrank == 0);
     }
 }
@@ -180,4 +209,34 @@ Real L2Distance<Atom>::operator()(const Point<Atom>& p, const Point<Atom>& q) co
     }
 
     return std::sqrt(val);
+}
+
+template <class Atom>
+Real EditDistance<Atom>::operator()(const Point<Atom>& s, const Point<Atom>& t) const
+{
+    Index m = s.size();
+    Index n = t.size();
+
+    IndexVector v0(n+1), v1(n+1);
+
+    for (Index i = 0; i <= n; ++i)
+        v0[i] = i;
+
+    for (Index i = 0; i < m; ++i)
+    {
+        v1[0] = i+1;
+
+        for (Index j = 0; j < n; ++j)
+        {
+            Index del = v0[j+1]+1;
+            Index ins = v1[j+0]+1;
+            Index sub = (s[i] == t[j])? v0[j] : v0[j]+1;
+
+            v1[j+1] = std::min(del, std::min(ins, sub));
+        }
+
+        std::swap(v0, v1);
+    }
+
+    return static_cast<Real>(v0[n]);
 }

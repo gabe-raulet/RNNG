@@ -226,5 +226,83 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
 template <class Atom_>
 Index PointContainer<Atom_>::read_seqs(const char *fname, MPI_Comm comm)
 {
-    return 0;
+    assert((std::same_as<Atom, char>));
+
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_Datatype MPI_ATOM = MPI_CHAR;
+
+    PointContainer<Atom> allpoints;
+    AtomVector alldata;
+    IndexVector alldataoffsets;
+
+    Index point_count;
+    Index atom_count;
+
+    if (!myrank)
+    {
+        allpoints.read_seqs(fname);
+
+        point_count = allpoints.num_points();
+        atom_count = allpoints.num_atoms();
+
+        alldataoffsets.reserve(point_count+1);
+        alldata.reserve(atom_count);
+
+        for (Index i = 0; i < point_count; ++i)
+        {
+            const PointType& p = allpoints[i];
+
+            alldataoffsets.push_back(alldata.size());
+            alldata.insert(alldata.end(), p.begin(), p.end());
+        }
+
+        alldataoffsets.push_back(alldata.size());
+    }
+
+    MPI_Bcast(&point_count, 1, MPI_INDEX, 0, comm);
+    MPI_Bcast(&atom_count, 1, MPI_INDEX, 0, comm);
+
+    if (myrank != 0)
+    {
+        alldata.resize(atom_count);
+        alldataoffsets.resize(point_count+1);
+    }
+
+    MPI_Bcast(alldata.data(), static_cast<int>(atom_count), MPI_ATOM, 0, comm);
+    MPI_Bcast(alldataoffsets.data(), static_cast<int>(point_count+1), MPI_INDEX, 0, comm);
+
+    Index mysize = point_count/nprocs;
+    Index myleft = point_count%nprocs;
+
+    if (myrank < myleft)
+        mysize++;
+
+    AtomVector mydata;
+    IndexVector mydatasizes;
+
+    Index myoffset;
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    for (Index i = myoffset; i < myoffset+mysize; ++i)
+    {
+        Index dataoffset = alldataoffsets[i];
+        Index datasize = alldataoffsets[i+1] - dataoffset;
+
+        auto first = alldata.begin() + dataoffset;
+        auto last = first + datasize;
+
+        std::copy(first, last, std::back_inserter(mydata));
+        mydatasizes.push_back(datasize);
+    }
+
+    IndexVector myindices(mysize);
+    std::iota(myindices.begin(), myindices.end(), myoffset);
+
+    init(mydata, mydatasizes, myindices);
+
+    return point_count;
 }
