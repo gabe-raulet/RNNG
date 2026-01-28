@@ -1,10 +1,41 @@
-#ifndef COVER_TREE_H_
-#define COVER_TREE_H_
+#ifndef SEARCH_H_
+#define SEARCH_H_
 
 #include "utils.h"
 #include "point.h"
 
-class CoverTree
+template <class T>
+class Search
+{
+    public:
+
+        template <class Atom, class Distance>
+        void build(const PointContainer<Atom>& points, const Distance& distance)
+        {
+            static_cast<T*>(this)->build(points, distance);
+        }
+
+        template <class Atom, class Distance, class Functor>
+        Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, const Functor& functor) const
+        {
+            return static_cast<T*>(this)->radius_query(points, distance, query, functor);
+        }
+};
+
+class BruteForce : public Search<BruteForce>
+{
+    public:
+
+        BruteForce() {}
+
+        template <class Atom, class Distance>
+        void build(const PointContainer<Atom>& points, const Distance& distance);
+
+        template <class Atom, class Distance, class Functor>
+        Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
+};
+
+class CoverTree : public Search<CoverTree>
 {
     public:
 
@@ -33,6 +64,6 @@ class CoverTree
         void allocate(Index num_verts);
 };
 
-#include "cover_tree.hpp"
+#include "search.hpp"
 
 #endif

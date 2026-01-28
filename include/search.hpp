@@ -51,7 +51,6 @@ void CoverTree::build(const PointContainer<Atom>& points, const Distance& distan
                 for (Index j = 0; j < m; ++j)
                 {
                     Real d = distance(points[new_candidate], points[ids[j]]);
-                    /* Real d = points.distance(points[new_candidate], points[ids[j]]); */
 
                     if (d < dists[j])
                     {
@@ -123,7 +122,6 @@ void CoverTree::build(const PointContainer<Atom>& points, const Distance& distan
     {
         root_hub.ids[i] = i;
         root_hub.dists[i] = distance(points[0], points[i]);
-        /* root_hub.dists[i] = points.distance(points[0], points[i]); */
 
         if (root_hub.dists[i] > root_hub.radius)
         {
@@ -242,11 +240,9 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance
         {
             Index leaf = centers[u];
             Real dist = distance(points[leaf], query);
-            /* Real dist = points.distance(points[leaf], query); */
 
             if (dist <= radius)
             {
-                /* functor(leaf, dist); */
                 functor(points[leaf], query, dist);
                 found++;
             }
@@ -258,10 +254,35 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance
                 Index child = *first;
                 Real epsilon = radii[child] + radius;
 
-                /* if (points.distance(points[centers[child]], query) <= epsilon) */
                 if (distance(points[centers[child]], query) <= epsilon)
                     queue.push_back(child);
             }
+        }
+    }
+
+    return found;
+}
+
+template <class Atom, class Distance>
+void BruteForce::build(const PointContainer<Atom>& points, const Distance& distance)
+{
+    return;
+}
+
+template <class Atom, class Distance, class Functor>
+Index BruteForce::radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const
+{
+    Index found = 0;
+    Index num_points = points.num_points();
+
+    for (Index i = 0; i < num_points; ++i)
+    {
+        Real dist = distance(points[i], query);
+
+        if (dist <= radius)
+        {
+            functor(points[i], query, dist);
+            found++;
         }
     }
 

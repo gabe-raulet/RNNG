@@ -12,7 +12,7 @@
 
 #include "utils.h"
 #include "point.h"
-#include "cover_tree.h"
+#include "search.h"
 
 MPI_Comm comm;
 int myrank, nprocs;
@@ -75,8 +75,8 @@ int main_mpi(int argc, char *argv[])
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
-    CoverTree tree(cover, leaf_size);
-    tree.build(points, distance);
+    CoverTree search(cover, leaf_size);
+    search.build(points, distance);
 
     mytime += MPI_Wtime();
 
@@ -102,7 +102,7 @@ int main_mpi(int argc, char *argv[])
 
     for (Index i = 0; i < num_points; ++i)
     {
-        tree.radius_query(points, distance, points[i], radius, functor);
+        search.radius_query(points, distance, points[i], radius, functor);
     }
 
     mytime += MPI_Wtime();
