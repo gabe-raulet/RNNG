@@ -72,7 +72,7 @@ class PointContainer
 
         void push_back(const Point<Atom>& p);
 
-    private:
+    protected:
 
         AtomVector data;
         IndexVector offsets, ids;
@@ -86,53 +86,44 @@ class PointContainer
 };
 
 template <class Atom_>
-class LocalCell
+class VoronoiDiagram : public PointContainer<Atom_>
 {
     public:
 
         using Atom = Atom_;
 
-        LocalCell(const PointContainer<Atom>& points, const RealVector& dists, Index cell_index) : points(points), dists(dists), cell_index(cell_index) {}
+        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers)
+            : PointContainer<Atom>(points),
+              centers(centers),
+              cell_indices(points.num_points(), 0),
+              dist_to_centers(points.num_points(), std::numeric_limits<Real>::max()) {}
 
-        friend std::ostream& operator<<(std::ostream& os, const LocalCell& cell)
+        template <class Distance>
+        void compute_point_partitioning(const Distance& distance)
         {
-            char buf[1024];
-            snprintf(buf, 1024, "LocalCell(cell_index=%lld, points=%lld, atoms=%lld)", cell.cell_index, cell.points.num_points(), cell.points.num_atoms());
-            os << buf;
-            return os;
+            Index size = PointContainer<Atom>::num_points();
+            Index num_centers = centers.num_points();
+
+            for (Index i = 0; i < size; ++i)
+            {
+                for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+                {
+                    Real dist = distance(centers[cell_index], (*this)[i]);
+
+                    if (dist <= dist_to_centers[i])
+                    {
+                        dist_to_centers[i] = dist;
+                        cell_indices[i] = cell_index;
+                    }
+                }
+            }
         }
 
     private:
 
-        PointContainer<Atom> points;
-        RealVector dists;
-        Index cell_index;
-};
-
-template <class Atom_>
-class Diagram
-{
-    public:
-
-        using Atom = Atom_;
-
-        Diagram(const PointContainer<Atom>& points);
-
-        template <class Distance>
-        void random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm);
-
-        Index num_landmarks() const { return landmarks.size(); }
-
-        void coalesce_local_cells(std::vector<LocalCell<Atom>>& cells) const;
-
-    private:
-
-        PointContainer<Atom> points;
         PointContainer<Atom> centers;
-
-        IndexVector mycells;
-        RealVector mydists;
-        IndexVector landmarks;
+        IndexVector cell_indices;
+        RealVector dist_to_centers;
 };
 
 #include "point.hpp"

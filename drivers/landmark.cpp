@@ -83,6 +83,10 @@ int main_mpi(int argc, char *argv[])
     else if (!strcmp(metric, "l2"))
         num_points = mypoints.read_fvecs(infile, comm);
 
+    mysize = mypoints.num_points();
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
     mytime += MPI_Wtime();
 
     assert((num_centers <= num_points));
@@ -97,24 +101,43 @@ int main_mpi(int argc, char *argv[])
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
-    Diagram<Atom> diagram(mypoints);
-    diagram.random_partition(num_centers, distance, rng_seed, comm);
+    IndexVector landmarks, mylandmarks;
+    if (!myrank) selection_sample(num_points, num_centers, landmarks, rng_seed);
+    else landmarks.resize(num_points);
+
+    MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm);
+
+    for (Index id : landmarks)
+        if (myoffset <= id && id < myoffset+mysize)
+            mylandmarks.push_back(id-myoffset);
+
+    PointContainer<Atom> mycenters, centers;
+
+    mycenters.indexed_gather(mypoints, mylandmarks);
+    centers.allgather(mycenters, comm);
 
     mytime += MPI_Wtime();
 
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) printf("[time=%.3f] computed partitioning [centers=%lld]\n", time, diagram.num_landmarks());
+        if (!myrank) fprintf(stderr, "[time=%.3f] picked centers [centers=%lld]\n", time, num_centers);
         fflush(stdout);
     }
 
-    std::vector<LocalCell<Atom>> cells;
-    diagram.coalesce_local_cells(cells);
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
 
-    for (const auto& cell : cells)
+    VoronoiDiagram<Atom> diagram(mypoints, centers);
+    diagram.compute_point_partitioning(distance);
+
+    mytime += MPI_Wtime();
+
+    if (verbosity >= 1)
     {
-        std::cout << "[myrank=" << myrank << "] " << cell << std::endl;
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning\n", time);
+        fflush(stdout);
     }
 
     //std::vector<Cell> cells;

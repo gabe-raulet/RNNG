@@ -482,96 +482,96 @@ void PointContainer<Atom_>::push_back(const Point<Atom>& p)
     ids.push_back(p.id());
 }
 
-template <class Atom_>
-Diagram<Atom_>::Diagram(const PointContainer<Atom>& points)
-    : points(points),
-      mycells(points.num_points()),
-      mydists(points.num_points(), std::numeric_limits<Real>::max()) {}
+/* template <class Atom_> */
+/* Diagram<Atom_>::Diagram(const PointContainer<Atom>& points) */
+    /* : points(points), */
+      /* mycells(points.num_points()), */
+      /* mydists(points.num_points(), std::numeric_limits<Real>::max()) {} */
 
-template <class Atom_>
-template <class Distance>
-void Diagram<Atom_>::random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm)
-{
-    int myrank, nprocs;
-    MPI_Comm_rank(comm, &myrank);
-    MPI_Comm_size(comm, &nprocs);
+/* template <class Atom_> */
+/* template <class Distance> */
+/* void Diagram<Atom_>::random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm) */
+/* { */
+    /* int myrank, nprocs; */
+    /* MPI_Comm_rank(comm, &myrank); */
+    /* MPI_Comm_size(comm, &nprocs); */
 
-    Index totsize;
-    Index mysize = points.num_points();
+    /* Index totsize; */
+    /* Index mysize = points.num_points(); */
 
-    MPI_Reduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, 0, comm);
+    /* MPI_Reduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, 0, comm); */
 
-    if (!myrank) selection_sample(totsize, num_centers, landmarks, rng_seed);
-    else landmarks.resize(num_centers);
+    /* if (!myrank) selection_sample(totsize, num_centers, landmarks, rng_seed); */
+    /* else landmarks.resize(num_centers); */
 
-    MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm);
+    /* MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm); */
 
-    Index myoffset;
-    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
-    if (!myrank) myoffset = 0;
+    /* Index myoffset; */
+    /* MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm); */
+    /* if (!myrank) myoffset = 0; */
 
-    IndexVector mylandmarks;
+    /* IndexVector mylandmarks; */
 
-    for (Index id : landmarks)
-        if (myoffset <= id && id < myoffset+mysize)
-            mylandmarks.push_back(id-myoffset);
+    /* for (Index id : landmarks) */
+        /* if (myoffset <= id && id < myoffset+mysize) */
+            /* mylandmarks.push_back(id-myoffset); */
 
-    PointContainer<Atom> mycenters;
-    mycenters.indexed_gather(points, mylandmarks);
+    /* PointContainer<Atom> mycenters; */
+    /* mycenters.indexed_gather(points, mylandmarks); */
 
-    centers.allgather(mycenters, comm);
+    /* centers.allgather(mycenters, comm); */
 
-    for (Index i = 0; i < mysize; ++i)
-    {
-        for (Index cell = 0; cell < num_centers; ++cell)
-        {
-            Real dist = distance(centers[cell], points[i]);
+    /* for (Index i = 0; i < mysize; ++i) */
+    /* { */
+        /* for (Index cell = 0; cell < num_centers; ++cell) */
+        /* { */
+            /* Real dist = distance(centers[cell], points[i]); */
 
-            if (dist <= mydists[i])
-            {
-                mydists[i] = dist;
-                mycells[i] = cell;
-            }
-        }
-    }
-}
+            /* if (dist <= mydists[i]) */
+            /* { */
+                /* mydists[i] = dist; */
+                /* mycells[i] = cell; */
+            /* } */
+        /* } */
+    /* } */
+/* } */
 
-template <class Atom_>
-void Diagram<Atom_>::coalesce_local_cells(std::vector<LocalCell<Atom>>& cells) const
-{
-    Index mysize = points.num_points();
-    Index num_centers = num_landmarks();
+/* template <class Atom_> */
+/* void Diagram<Atom_>::coalesce_local_cells(std::vector<LocalCell<Atom>>& cells) const */
+/* { */
+    /* Index mysize = points.num_points(); */
+    /* Index num_centers = num_landmarks(); */
 
-    using PointVector = std::vector<Point<Atom>>;
+    /* using PointVector = std::vector<Point<Atom>>; */
 
-    std::vector<PointVector> cell_points(num_centers);
-    std::vector<RealVector> cell_dists(num_centers);
+    /* std::vector<PointVector> cell_points(num_centers); */
+    /* std::vector<RealVector> cell_dists(num_centers); */
 
-    for (Index i = 0; i < mysize; ++i)
-    {
-        Index cell_index = mycells[i];
-        Real dist = mydists[i];
+    /* for (Index i = 0; i < mysize; ++i) */
+    /* { */
+        /* Index cell_index = mycells[i]; */
+        /* Real dist = mydists[i]; */
 
-        cell_points[cell_index].push_back(points[i]);
-        cell_dists[cell_index].push_back(dist);
-    }
+        /* cell_points[cell_index].push_back(points[i]); */
+        /* cell_dists[cell_index].push_back(dist); */
+    /* } */
 
-    cells.clear();
-    cells.reserve(num_centers);
+    /* cells.clear(); */
+    /* cells.reserve(num_centers); */
 
-    for (Index i = 0; i < num_centers; ++i)
-    {
-        Index atom_count = 0;
+    /* for (Index i = 0; i < num_centers; ++i) */
+    /* { */
+        /* Index atom_count = 0; */
 
-        for (const auto& p : cell_points[i])
-            atom_count += p.size();
+        /* for (const auto& p : cell_points[i]) */
+            /* atom_count += p.size(); */
 
-        PointContainer<Atom> cell_container;
-        cell_container.reserve_atoms(atom_count);
+        /* PointContainer<Atom> cell_container; */
+        /* cell_container.reserve_atoms(atom_count); */
 
-        for (const auto& p : cell_points[i])
-            cell_container.push_back(p);
+        /* for (const auto& p : cell_points[i]) */
+            /* cell_container.push_back(p); */
 
-        cells.emplace_back(cell_container, cell_dists[i], i);
-    }
-}
+        /* cells.emplace_back(cell_container, cell_dists[i], i); */
+    /* } */
+/* } */
