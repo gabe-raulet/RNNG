@@ -105,8 +105,16 @@ int main_mpi(int argc, char *argv[])
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) printf("[time=%.3f] computed partitioning [centers=%lld,radius=%.4f]\n", time, diagram.num_landmarks(), r);
+        if (!myrank) printf("[time=%.3f] computed partitioning [centers=%lld]\n", time, diagram.num_landmarks());
         fflush(stdout);
+    }
+
+    std::vector<LocalCell<Atom>> cells;
+    diagram.coalesce_local_cells(cells);
+
+    for (const auto& cell : cells)
+    {
+        std::cout << "[myrank=" << myrank << "] " << cell << std::endl;
     }
 
     //std::vector<Cell> cells;

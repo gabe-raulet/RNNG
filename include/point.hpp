@@ -475,6 +475,14 @@ void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const 
 }
 
 template <class Atom_>
+void PointContainer<Atom_>::push_back(const Point<Atom>& p)
+{
+    data.insert(data.end(), p.begin(), p.end());
+    offsets.push_back(data.size());
+    ids.push_back(p.id());
+}
+
+template <class Atom_>
 Diagram<Atom_>::Diagram(const PointContainer<Atom>& points)
     : points(points),
       mycells(points.num_points()),
@@ -528,3 +536,42 @@ void Diagram<Atom_>::random_partition(Index num_centers, const Distance& distanc
     }
 }
 
+template <class Atom_>
+void Diagram<Atom_>::coalesce_local_cells(std::vector<LocalCell<Atom>>& cells) const
+{
+    Index mysize = points.num_points();
+    Index num_centers = num_landmarks();
+
+    using PointVector = std::vector<Point<Atom>>;
+
+    std::vector<PointVector> cell_points(num_centers);
+    std::vector<RealVector> cell_dists(num_centers);
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        Index cell_index = mycells[i];
+        Real dist = mydists[i];
+
+        cell_points[cell_index].push_back(points[i]);
+        cell_dists[cell_index].push_back(dist);
+    }
+
+    cells.clear();
+    cells.reserve(num_centers);
+
+    for (Index i = 0; i < num_centers; ++i)
+    {
+        Index atom_count = 0;
+
+        for (const auto& p : cell_points[i])
+            atom_count += p.size();
+
+        PointContainer<Atom> cell_container;
+        cell_container.reserve_atoms(atom_count);
+
+        for (const auto& p : cell_points[i])
+            cell_container.push_back(p);
+
+        cells.emplace_back(cell_container, cell_dists[i], i);
+    }
+}

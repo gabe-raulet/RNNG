@@ -37,7 +37,7 @@ class PointContainer
         using Atom = Atom_;
         using AtomVector = std::vector<Atom>;
 
-        PointContainer() {}
+        PointContainer() : offsets({0}) {}
         PointContainer(const AtomVector& atoms, const IndexVector& sizes);
         PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
 
@@ -67,6 +67,11 @@ class PointContainer
         void allgather(const PointContainer& sendbuf, MPI_Comm comm);
         void indexed_gather(const PointContainer& sendbuf, const IndexVector& index_offsets);
 
+        void clear() { data.clear(); offsets.assign({0}); ids.clear(); }
+        void reserve_atoms(Index atom_count) { data.reserve(atom_count); }
+
+        void push_back(const Point<Atom>& p);
+
     private:
 
         AtomVector data;
@@ -78,6 +83,30 @@ class PointContainer
         inline const Atom* mem(Index i) const { return &data[offsets[i]]; }
         inline Index size(Index i) const { return offsets[i+1]-offsets[i]; }
         inline Index id(Index i) const { return ids[i]; }
+};
+
+template <class Atom_>
+class LocalCell
+{
+    public:
+
+        using Atom = Atom_;
+
+        LocalCell(const PointContainer<Atom>& points, const RealVector& dists, Index cell_index) : points(points), dists(dists), cell_index(cell_index) {}
+
+        friend std::ostream& operator<<(std::ostream& os, const LocalCell& cell)
+        {
+            char buf[1024];
+            snprintf(buf, 1024, "LocalCell(cell_index=%lld, points=%lld, atoms=%lld)", cell.cell_index, cell.points.num_points(), cell.points.num_atoms());
+            os << buf;
+            return os;
+        }
+
+    private:
+
+        PointContainer<Atom> points;
+        RealVector dists;
+        Index cell_index;
 };
 
 template <class Atom_>
@@ -93,6 +122,8 @@ class Diagram
         void random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm);
 
         Index num_landmarks() const { return landmarks.size(); }
+
+        void coalesce_local_cells(std::vector<LocalCell<Atom>>& cells) const;
 
     private:
 
