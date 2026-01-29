@@ -1,4 +1,29 @@
 template <class Atom_>
+PointContainer<Atom_>::PointContainer(const std::vector<Point<Atom>>& points)
+{
+    Index point_count = points.size();
+    Index atom_count = 0;
+
+    for (const auto& p : points)
+        atom_count += p.size();
+
+    data.reserve(atom_count);
+    offsets.reserve(point_count+1);
+    ids.reserve(point_count);
+
+    for (Index i = 0; i < point_count; ++i)
+    {
+        Point<Atom> p = points[i];
+
+        offsets.push_back(data.size());
+        ids.push_back(p.id());
+        data.insert(data.end(), p.begin(), p.end());
+    }
+
+    offsets.push_back(data.size());
+}
+
+template <class Atom_>
 PointContainer<Atom_>::PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices)
 {
     init(atoms, sizes, indices);
@@ -458,6 +483,10 @@ void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const 
 }
 
 template <class Atom_>
+VoronoiCell<Atom_>::VoronoiCell(const std::vector<Point<Atom>>& points, const RealVector& dist_to_centers, Index cell_index)
+    : PointContainer<Atom>(points), dist_to_centers(dist_to_centers), cell_index(cell_index) {}
+
+template <class Atom_>
 template <class Distance>
 VoronoiDiagram<Atom_>::VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, const Distance& distance)
     : PointContainer<Atom>(points),
@@ -484,17 +513,200 @@ VoronoiDiagram<Atom_>::VoronoiDiagram(const PointContainer<Atom>& points, const 
 }
 
 template <class Atom_>
-void VoronoiDiagram<Atom_>::coalesce_indices(std::vector<IndexVector>& coalesced_indices) const
+void VoronoiDiagram<Atom_>::coalesce_cells(std::vector<Cell>& mycells, MPI_Comm comm) const
 {
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    Index myoffset;
     Index mysize = PointContainer<Atom>::num_points();
     Index num_centers = centers.num_points();
 
-    coalesced_indices.clear();
-    coalesced_indices.resize(num_centers);
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    IndexVector cell_point_counts(num_centers), cell_atom_counts(num_centers);
+    IndexVector my_cell_point_counts(num_centers, 0), my_cell_atom_counts(num_centers, 0);
 
     for (Index i = 0; i < mysize; ++i)
     {
         Index cell_index = cell_indices[i];
-        coalesced_indices[cell_index].push_back((*this)[i].id());
+        my_cell_point_counts[cell_index]++;
+        my_cell_atom_counts[cell_index] += (*this)[i].size();
     }
+
+    MPI_Allreduce(my_cell_point_counts.data(), cell_point_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
+    MPI_Allreduce(my_cell_atom_counts.data(), cell_atom_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
+
+    std::vector<int> dests(num_centers);
+    IndexPairVector pairs;
+
+    for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+    {
+        pairs.emplace_back(cell_atom_counts[cell_index], cell_index);
+    }
+
+    std::sort(pairs.rbegin(), pairs.rend());
+
+    IndexVector bins(nprocs, 0);
+
+    for (const auto& [size, cell_index] : pairs)
+    {
+        int dest = std::min_element(bins.begin(), bins.end()) - bins.begin();
+        bins[dest] += size;
+        dests[cell_index] = dest;
+    }
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    Index my_assigned_cells = 0;
+
+    IndexVector cellmap(num_centers);
+    IndexVector rankcounts(nprocs, 0);
+
+    for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+    {
+        int dest = dests[cell_index];
+        cellmap[cell_index] = rankcounts[dest]++;
+        if (dest == myrank) my_assigned_cells++;
+    }
+
+    std::vector<int> sendcounts(nprocs,0), recvcounts(nprocs), sdispls(nprocs), rdispls(nprocs);
+    std::vector<int> sendcounts_atoms(nprocs,0), recvcounts_atoms(nprocs), sdispls_atoms(nprocs), rdispls_atoms(nprocs);
+
+    struct PointEnvelope
+    {
+        Index id;
+        Index cell;
+        Index size;
+        Real dist;
+
+        PointEnvelope() {}
+    };
+
+    using PointEnvelopeVector = std::vector<PointEnvelope>;
+
+    MPI_Datatype MPI_POINT_ENVELOPE;
+    MPI_Type_contiguous(sizeof(PointEnvelope), MPI_CHAR, &MPI_POINT_ENVELOPE);
+    MPI_Type_commit(&MPI_POINT_ENVELOPE);
+
+    Index totsend, totrecv, totsend_atoms, totrecv_atoms;
+    AtomVector sendbuf_atoms, recvbuf_atoms;
+    PointEnvelopeVector sendbuf_envs, recvbuf_envs;
+
+    for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+    {
+        int dest = dests[cell_index];
+        sendcounts[dest] += my_cell_point_counts[cell_index];
+        sendcounts_atoms[dest] += my_cell_atom_counts[cell_index];
+    }
+
+    MPI_Alltoall(sendcounts.data(), 1, MPI_INT, recvcounts.data(), 1, MPI_INT, comm);
+    MPI_Alltoall(sendcounts_atoms.data(), 1, MPI_INT, recvcounts_atoms.data(), 1, MPI_INT, comm);
+
+    std::exclusive_scan(sendcounts.begin(), sendcounts.end(), sdispls.begin(), 0);
+    std::exclusive_scan(recvcounts.begin(), recvcounts.end(), rdispls.begin(), 0);
+
+    std::exclusive_scan(sendcounts_atoms.begin(), sendcounts_atoms.end(), sdispls_atoms.begin(), 0);
+    std::exclusive_scan(recvcounts_atoms.begin(), recvcounts_atoms.end(), rdispls_atoms.begin(), 0);
+
+    totsend = sendcounts.back() + sdispls.back();
+    totrecv = recvcounts.back() + rdispls.back();
+
+    totsend_atoms = sendcounts_atoms.back() + sdispls_atoms.back();
+    totrecv_atoms = recvcounts_atoms.back() + rdispls_atoms.back();
+
+    sendbuf_atoms.resize(totsend_atoms), recvbuf_atoms.resize(totrecv_atoms);
+    sendbuf_envs.resize(totsend), recvbuf_envs.resize(totrecv);
+
+    auto sptrs = sdispls;
+
+    for (Index i = 0; i < totsend; ++i)
+    {
+        Index cell_index = cell_indices[i];
+        int dest = dests[cell_index];
+        Index loc = sptrs[dest]++;
+        Point<Atom> pt = (*this)[i];
+
+        sendbuf_envs[loc].id = i+myoffset;
+        sendbuf_envs[loc].cell = cell_index;
+        sendbuf_envs[loc].size = pt.size();
+        sendbuf_envs[loc].dist = dist_to_centers[i];
+    }
+
+    auto it = sendbuf_atoms.begin();
+
+    for (Index i = 0; i < totsend; ++i)
+    {
+        Index id = sendbuf_envs[i].id - myoffset;
+        Point<Atom> pt = (*this)[id];
+
+        it = std::copy(pt.begin(), pt.end(), it);
+        assert((pt.size() == sendbuf_envs[i].size));
+    }
+
+    MPI_Request reqs[2];
+
+    MPI_Ialltoallv(sendbuf_envs.data(), sendcounts.data(), sdispls.data(), MPI_POINT_ENVELOPE,
+                   recvbuf_envs.data(), recvcounts.data(), rdispls.data(), MPI_POINT_ENVELOPE, comm, &reqs[0]);
+
+    MPI_Ialltoallv(sendbuf_atoms.data(), sendcounts_atoms.data(), sdispls_atoms.data(), MPI_ATOM,
+                   recvbuf_atoms.data(), recvcounts_atoms.data(), rdispls_atoms.data(), MPI_ATOM, comm, &reqs[1]);
+
+    MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
+
+    IndexVector cellcounts(my_assigned_cells, 0);
+    IndexVector recv_offsets(totrecv);
+
+    Index disp = 0;
+
+    for (Index i = 0; i < totrecv; ++i)
+    {
+        Index cell = recvbuf_envs[i].cell;
+        Index size = recvbuf_envs[i].size;
+
+        cellcounts[cellmap[cell]]++;
+
+        recv_offsets[i] = disp;
+        disp += size;
+    }
+
+    std::vector<std::vector<Point<Atom>>> cell_points(my_assigned_cells);
+    std::vector<RealVector> cell_dist_to_centers(my_assigned_cells);
+    IndexVector cell_center_offsets(my_assigned_cells);
+    IndexVector global_cell_indices(my_assigned_cells);
+
+    for (Index i = 0; i < totrecv; ++i)
+    {
+        Index cell_index = cellmap[recvbuf_envs[i].cell];
+        Index size = recvbuf_envs[i].size;
+        global_cell_indices[cell_index] = recvbuf_envs[i].cell;
+
+        if (centers[recvbuf_envs[i].cell].id() == recvbuf_envs[i].id)
+            cell_center_offsets[cell_index] = cell_points[cell_index].size();
+
+        const Atom *mem = &recvbuf_atoms[recv_offsets[i]];
+        cell_points[cell_index].emplace_back(mem, size, recvbuf_envs[i].id);
+        cell_dist_to_centers[cell_index].push_back(recvbuf_envs[i].dist);
+    }
+
+    mycells.clear();
+    mycells.reserve(my_assigned_cells);
+
+    for (Index cell = 0; cell < my_assigned_cells; ++cell)
+    {
+        auto& pts = cell_points[cell];
+        auto& dists = cell_dist_to_centers[cell];
+
+        if (!pts.empty())
+        {
+            std::swap(pts[0], pts[cell_center_offsets[cell]]);
+            std::swap(dists[0], dists[cell_center_offsets[cell]]);
+        }
+
+        mycells.emplace_back(pts, dists, global_cell_indices[cell]);
+    }
+
+    MPI_Type_free(&MPI_POINT_ENVELOPE);
 }

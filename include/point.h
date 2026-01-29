@@ -38,6 +38,7 @@ class PointContainer
         using AtomVector = std::vector<Atom>;
 
         PointContainer() : offsets({0}) {}
+        PointContainer(const std::vector<Point<Atom>>& points);
         PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
         PointContainer(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);
 
@@ -78,16 +79,33 @@ class PointContainer
 };
 
 template <class Atom_>
-class VoronoiDiagram : public PointContainer<Atom_>
+class VoronoiCell : public PointContainer<Atom_>
 {
     public:
 
         using Atom = Atom_;
 
+        VoronoiCell(const std::vector<Point<Atom>>& points, const RealVector& dist_to_centers, Index cell_index);
+
+    protected:
+
+        RealVector dist_to_centers;
+        Index cell_index;
+};
+
+template <class Atom_>
+class VoronoiDiagram : public PointContainer<Atom_>
+{
+    public:
+
+        using Atom = Atom_;
+        using AtomVector = std::vector<Atom>;
+        using Cell = VoronoiCell<Atom>;
+
         template <class Distance>
         VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, const Distance& distance);
 
-        void coalesce_indices(std::vector<IndexVector>& coalesced_indices) const;
+        void coalesce_cells(std::vector<Cell>& mycells, MPI_Comm comm) const;
 
     private:
 
