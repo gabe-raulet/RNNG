@@ -154,6 +154,15 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
+    /* std::vector<CoverTree> trees; */
+    /* Index num_cells = mycells.size(); */
+
+    /* for (Index i = 0; i < num_cells; ++i) */
+    /* { */
+        /* trees.emplace_back(cover, leaf_size); */
+        /* trees.back().build(mycells[i], distance); */
+    /* } */
+
     //std::vector<IndexVector> coalesced_indices;
     //diagram.coalesce_indices(coalesced_indices);
 

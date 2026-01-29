@@ -87,10 +87,24 @@ class VoronoiCell : public PointContainer<Atom_>
 
         VoronoiCell(const std::vector<Point<Atom>>& points, const RealVector& dist_to_centers, Index cell_index);
 
+        void add_ghost_point(const Point<Atom>& p);
+
+        Index id() const { return cell_index; }
+        Index ghost_points() const { return PointContainer<Atom>::num_points() - num_interior_points; }
+        Index interior_points() const { return num_interior_points; }
+
+
     protected:
 
-        RealVector dist_to_centers;
         Index cell_index;
+        Index num_interior_points;
+        RealVector dist_to_centers;
+
+    private:
+
+        using PointContainer<Atom>::data;
+        using PointContainer<Atom>::offsets;
+        using PointContainer<Atom>::ids;
 };
 
 template <class Atom_>

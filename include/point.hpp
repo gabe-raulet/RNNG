@@ -467,6 +467,7 @@ void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const 
     for (Index i = 0; i < newsize; ++i)
     {
         offsets[i] = atom_count;
+        ids[i] = sendbuf.id(index_offsets[i]);
         atom_count += sendbuf.size(index_offsets[i]);
     }
 
@@ -484,7 +485,15 @@ void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const 
 
 template <class Atom_>
 VoronoiCell<Atom_>::VoronoiCell(const std::vector<Point<Atom>>& points, const RealVector& dist_to_centers, Index cell_index)
-    : PointContainer<Atom>(points), dist_to_centers(dist_to_centers), cell_index(cell_index) {}
+    : PointContainer<Atom>(points), dist_to_centers(dist_to_centers), cell_index(cell_index), num_interior_points(points.size()) {}
+
+template <class Atom_>
+void VoronoiCell<Atom_>::add_ghost_point(const Point<Atom>& p)
+{
+    std::copy(p.begin(), p.end(), std::back_inserter(data));
+    offsets.push_back(data.size());
+    ids.push_back(p.id());
+}
 
 template <class Atom_>
 template <class Distance>
