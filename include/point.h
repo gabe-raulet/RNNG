@@ -92,32 +92,10 @@ class VoronoiDiagram : public PointContainer<Atom_>
 
         using Atom = Atom_;
 
-        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers)
-            : PointContainer<Atom>(points),
-              centers(centers),
-              cell_indices(points.num_points(), 0),
-              dist_to_centers(points.num_points(), std::numeric_limits<Real>::max()) {}
+        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers);
 
         template <class Distance>
-        void compute_point_partitioning(const Distance& distance)
-        {
-            Index size = PointContainer<Atom>::num_points();
-            Index num_centers = centers.num_points();
-
-            for (Index i = 0; i < size; ++i)
-            {
-                for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
-                {
-                    Real dist = distance(centers[cell_index], (*this)[i]);
-
-                    if (dist <= dist_to_centers[i])
-                    {
-                        dist_to_centers[i] = dist;
-                        cell_indices[i] = cell_index;
-                    }
-                }
-            }
-        }
+        void compute_point_partitioning(const Distance& distance);
 
     private:
 
