@@ -1,24 +1,7 @@
-
-template <class Atom_>
-PointContainer<Atom_>::PointContainer(const AtomVector& atoms, const IndexVector& sizes)
-{
-    IndexVector indices(sizes.size());
-    std::iota(indices.begin(), indices.end(), (Index)0);
-    init(atoms, sizes, indices);
-}
-
 template <class Atom_>
 PointContainer<Atom_>::PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices)
 {
     init(atoms, sizes, indices);
-}
-
-template <class Atom_>
-PointContainer<Atom_>::PointContainer(const AtomVector& atoms, Index size, Index dim)
-{
-    IndexVector indices(size);
-    std::iota(indices.begin(), indices.end(), (Index)0);
-    init(atoms, size, dim, indices);
 }
 
 template <class Atom_>
@@ -475,23 +458,12 @@ void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const 
 }
 
 template <class Atom_>
-void PointContainer<Atom_>::push_back(const Point<Atom>& p)
-{
-    data.insert(data.end(), p.begin(), p.end());
-    offsets.push_back(data.size());
-    ids.push_back(p.id());
-}
-
-template <class Atom_>
-VoronoiDiagram<Atom_>::VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers)
+template <class Distance>
+VoronoiDiagram<Atom_>::VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, const Distance& distance)
     : PointContainer<Atom>(points),
       centers(centers),
       cell_indices(points.num_points(), 0),
-      dist_to_centers(points.num_points(), std::numeric_limits<Real>::max()) {}
-
-template <class Atom_>
-template <class Distance>
-void VoronoiDiagram<Atom_>::compute_point_partitioning(const Distance& distance)
+      dist_to_centers(points.num_points(), std::numeric_limits<Real>::max())
 {
     Index size = PointContainer<Atom>::num_points();
     Index num_centers = centers.num_points();
@@ -508,5 +480,21 @@ void VoronoiDiagram<Atom_>::compute_point_partitioning(const Distance& distance)
                 cell_indices[i] = cell_index;
             }
         }
+    }
+}
+
+template <class Atom_>
+void VoronoiDiagram<Atom_>::coalesce_indices(std::vector<IndexVector>& coalesced_indices) const
+{
+    Index mysize = PointContainer<Atom>::num_points();
+    Index num_centers = centers.num_points();
+
+    coalesced_indices.clear();
+    coalesced_indices.resize(num_centers);
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        Index cell_index = cell_indices[i];
+        coalesced_indices[cell_index].push_back((*this)[i].id());
     }
 }

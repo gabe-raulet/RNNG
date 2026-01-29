@@ -38,10 +38,7 @@ class PointContainer
         using AtomVector = std::vector<Atom>;
 
         PointContainer() : offsets({0}) {}
-        PointContainer(const AtomVector& atoms, const IndexVector& sizes);
         PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
-
-        PointContainer(const AtomVector& atoms, Index size, Index dim);
         PointContainer(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);
 
         Index num_points() const { return ids.size(); }
@@ -67,11 +64,6 @@ class PointContainer
         void allgather(const PointContainer& sendbuf, MPI_Comm comm);
         void indexed_gather(const PointContainer& sendbuf, const IndexVector& index_offsets);
 
-        void clear() { data.clear(); offsets.assign({0}); ids.clear(); }
-        void reserve_atoms(Index atom_count) { data.reserve(atom_count); }
-
-        void push_back(const Point<Atom>& p);
-
     protected:
 
         AtomVector data;
@@ -92,10 +84,10 @@ class VoronoiDiagram : public PointContainer<Atom_>
 
         using Atom = Atom_;
 
-        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers);
-
         template <class Distance>
-        void compute_point_partitioning(const Distance& distance);
+        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, const Distance& distance);
+
+        void coalesce_indices(std::vector<IndexVector>& coalesced_indices) const;
 
     private:
 

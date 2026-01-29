@@ -128,8 +128,7 @@ int main_mpi(int argc, char *argv[])
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
-    VoronoiDiagram<Atom> diagram(mypoints, centers);
-    diagram.compute_point_partitioning(distance);
+    VoronoiDiagram<Atom> diagram(mypoints, centers, distance);
 
     mytime += MPI_Wtime();
 
@@ -139,6 +138,66 @@ int main_mpi(int argc, char *argv[])
         if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning\n", time);
         fflush(stdout);
     }
+
+    std::vector<IndexVector> coalesced_indices;
+    diagram.coalesce_indices(coalesced_indices);
+
+    IndexVector cell_point_counts(num_centers, 0), cell_atom_counts(num_centers, 0);
+
+    for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+    {
+        for (Index id : coalesced_indices[cell_index])
+        {
+            cell_point_counts[cell_index]++;
+            cell_atom_counts[cell_index] += mypoints[id-myoffset].size();
+        }
+    }
+
+    MPI_Allreduce(MPI_IN_PLACE, cell_point_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
+    MPI_Allreduce(MPI_IN_PLACE, cell_atom_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
+
+    std::vector<int> dests(num_centers);
+    IndexPairVector pairs;
+
+    for (Index cell = 0; cell < num_centers; ++cell)
+    {
+        pairs.emplace_back(cell_atom_counts[cell], cell);
+    }
+
+    std::sort(pairs.rbegin(), pairs.rend());
+
+    IndexVector bins(nprocs, 0);
+
+    for (const auto& [size, cell] : pairs)
+    {
+        int dest = std::min_element(bins.begin(), bins.end()) - bins.begin();
+        bins[dest] += size;
+        dests[cell] = dest;
+    }
+
+    if (!myrank)
+    {
+        for (int i = 0; i < nprocs; ++i)
+        {
+            Index my_assigned_points = 0;
+            Index my_assigned_atoms = 0;
+            IndexVector my_assigned_cells;
+
+            for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+            {
+                if (dests[cell_index] == i)
+                {
+                    my_assigned_points += cell_point_counts[cell_index];
+                    my_assigned_atoms += cell_atom_counts[cell_index];
+                    my_assigned_cells.push_back(cell_index);
+                }
+                /* printf("[cell=%lld,dest=%d,points=%lld,atoms=%lld]\n", cell_index, dests[cell_index], cell_point_counts[cell_index], cell_atom_counts[cell_index]); */
+            }
+
+            printf("[rank=%d,points=%lld,atoms=%lld] cells=%s\n", i, my_assigned_points, my_assigned_atoms, CONTAINER_REPR(my_assigned_cells));
+        }
+    }
+
 
     //std::vector<Cell> cells;
 
