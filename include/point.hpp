@@ -384,3 +384,147 @@ void PointContainer<Atom_>::swap(PointContainer& other)
     std::swap(offsets, other.offsets);
     std::swap(ids, other.ids);
 }
+
+template <class Atom_>
+void PointContainer<Atom_>::allgather(const PointContainer& sendbuf, MPI_Comm comm)
+{
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    data.clear();
+    offsets.clear();
+    ids.clear();
+
+    const AtomVector& sendbuf_atoms = sendbuf.data;
+    const IndexVector& sendbuf_ids = sendbuf.ids;
+
+    AtomVector& recvbuf_atoms = data;
+    IndexVector& recvbuf_ids = ids;
+    IndexVector& recvbuf_offsets = offsets;
+
+    Index mysize = sendbuf.num_points();
+
+    IndexVector sendbuf_sizes(mysize);
+    IndexVector recvbuf_sizes;
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        sendbuf_sizes[i] = sendbuf.size(i);
+    }
+
+    std::vector<int> recvcounts(nprocs), rdispls(nprocs);
+    std::vector<int> recvcounts_atoms(nprocs), rdispls_atoms(nprocs);
+
+    recvcounts[myrank] = mysize;
+    recvcounts_atoms[myrank] = sendbuf_atoms.size();
+
+    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, recvcounts.data(), 1, MPI_INT, comm);
+    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, recvcounts_atoms.data(), 1, MPI_INT, comm);
+
+    std::exclusive_scan(recvcounts.begin(), recvcounts.end(), rdispls.begin(), 0);
+    std::exclusive_scan(recvcounts_atoms.begin(), recvcounts_atoms.end(), rdispls_atoms.begin(), 0);
+
+    int totrecv = recvcounts.back() + rdispls.back();
+    int totrecv_atoms = recvcounts_atoms.back() + rdispls_atoms.back();
+
+    recvbuf_atoms.resize(totrecv_atoms);
+    recvbuf_ids.resize(totrecv);
+    recvbuf_sizes.resize(totrecv);
+
+    MPI_Allgatherv(sendbuf_ids.data(), recvcounts[myrank], MPI_INDEX, recvbuf_ids.data(), recvcounts.data(), rdispls.data(), MPI_INDEX, comm);
+    MPI_Allgatherv(sendbuf_sizes.data(), recvcounts[myrank], MPI_INDEX, recvbuf_sizes.data(), recvcounts.data(), rdispls.data(), MPI_INDEX, comm);
+    MPI_Allgatherv(sendbuf_atoms.data(), recvcounts_atoms[myrank], MPI_ATOM, recvbuf_atoms.data(), recvcounts_atoms.data(), rdispls_atoms.data(), MPI_ATOM, comm);
+
+    recvbuf_offsets.resize(totrecv);
+
+    std::exclusive_scan(recvbuf_sizes.begin(), recvbuf_sizes.end(), recvbuf_offsets.begin(), (Index)0);
+    recvbuf_offsets.push_back(recvbuf_offsets.back() + recvbuf_sizes.back());
+
+    assert((recvbuf_offsets.back() == recvbuf_atoms.size()));
+}
+
+template <class Atom_>
+void PointContainer<Atom_>::indexed_gather(const PointContainer& sendbuf, const IndexVector& index_offsets)
+{
+    Index newsize = index_offsets.size();
+
+    offsets.resize(newsize+1);
+    ids.resize(newsize);
+
+    Index atom_count = 0;
+
+    for (Index i = 0; i < newsize; ++i)
+    {
+        offsets[i] = atom_count;
+        atom_count += sendbuf.size(index_offsets[i]);
+    }
+
+    offsets[newsize] = atom_count;
+
+    data.clear();
+    data.reserve(atom_count);
+
+    for (Index i = 0; i < newsize; ++i)
+    {
+        Point<Atom> p = sendbuf[index_offsets[i]];
+        data.insert(data.end(), p.begin(), p.end());
+    }
+}
+
+template <class Atom_>
+Diagram<Atom_>::Diagram(const PointContainer<Atom>& points)
+    : points(points),
+      mycells(points.num_points()),
+      mydists(points.num_points(), std::numeric_limits<Real>::max()) {}
+
+template <class Atom_>
+template <class Distance>
+void Diagram<Atom_>::random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm)
+{
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    Index totsize;
+    Index mysize = points.num_points();
+
+    MPI_Reduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+    if (!myrank) selection_sample(totsize, num_centers, landmarks, rng_seed);
+    else landmarks.resize(num_centers);
+
+    MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm);
+
+    Index myoffset;
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    IndexVector mylandmarks;
+
+    for (Index id : landmarks)
+        if (myoffset <= id && id < myoffset+mysize)
+            mylandmarks.push_back(id-myoffset);
+
+    PointContainer<Atom> mycenters;
+    mycenters.indexed_gather(points, mylandmarks);
+
+    centers.allgather(mycenters, comm);
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        for (Index cell = 0; cell < num_centers; ++cell)
+        {
+            Real dist = distance(centers[cell], points[i]);
+
+            if (dist <= mydists[i])
+            {
+                mydists[i] = dist;
+                mycells[i] = cell;
+            }
+        }
+    }
+}
+

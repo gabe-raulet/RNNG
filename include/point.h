@@ -64,6 +64,9 @@ class PointContainer
         void sendrecv(PointContainer& recvbuf, int recvrank, int sendrank, MPI_Comm comm, SendrecvRequest& req);
         void swap(PointContainer& other);
 
+        void allgather(const PointContainer& sendbuf, MPI_Comm comm);
+        void indexed_gather(const PointContainer& sendbuf, const IndexVector& index_offsets);
+
     private:
 
         AtomVector data;
@@ -75,6 +78,30 @@ class PointContainer
         inline const Atom* mem(Index i) const { return &data[offsets[i]]; }
         inline Index size(Index i) const { return offsets[i+1]-offsets[i]; }
         inline Index id(Index i) const { return ids[i]; }
+};
+
+template <class Atom_>
+class Diagram
+{
+    public:
+
+        using Atom = Atom_;
+
+        Diagram(const PointContainer<Atom>& points);
+
+        template <class Distance>
+        void random_partition(Index num_centers, const Distance& distance, int rng_seed, MPI_Comm comm);
+
+        Index num_landmarks() const { return landmarks.size(); }
+
+    private:
+
+        PointContainer<Atom> points;
+        PointContainer<Atom> centers;
+
+        IndexVector mycells;
+        RealVector mydists;
+        IndexVector landmarks;
 };
 
 #include "point.hpp"

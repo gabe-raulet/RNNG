@@ -10,6 +10,7 @@
 #include <vector>
 #include <limits>
 #include <iostream>
+#include <fstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <iomanip>
