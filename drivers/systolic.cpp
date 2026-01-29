@@ -130,7 +130,7 @@ int main_mpi(int argc, char *argv[])
 
     SendrecvRequest request;
 
-    for (int step = 0; step < nprocs; ++step)
+    for (int step = 0; step <= nprocs/2; ++step)
     {
         sendbuf.sendrecv(recvbuf, recvrank, sendrank, comm, request);
 
