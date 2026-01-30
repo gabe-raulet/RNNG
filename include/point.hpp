@@ -1,4 +1,5 @@
 #include "search.h"
+#include <string.h>
 
 template <class Atom_>
 PointContainer<Atom_>::PointContainer(const std::vector<Point<Atom>>& points)
@@ -121,10 +122,10 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname)
         const char *ps = p.data() + sizeof(int);
 
         int dt;
-        std::memcpy(&dt, ds, sizeof(int)); assert((dt == d));
+        memcpy(&dt, ds, sizeof(int)); assert((dt == d));
 
         char *dest = (char*)(&data[i*d]);
-        std::memcpy(dest, ps, point_size);
+        memcpy(dest, ps, point_size);
 
         offsets[i] = disp;
         ids[i] = i;
