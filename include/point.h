@@ -65,6 +65,8 @@ class PointContainer
         void allgather(const PointContainer& sendbuf, MPI_Comm comm);
         void indexed_gather(const PointContainer& sendbuf, const IndexVector& index_offsets);
 
+        void push_back(const Point<Atom>& p);
+
     protected:
 
         AtomVector data;
@@ -91,17 +93,18 @@ class VoronoiCell : public PointContainer<Atom_>
         void add_ghost_point(const Point<Atom>& p);
 
         Index id() const { return cell_index; }
-        Index ghost_points() const { return PointContainer<Atom>::num_points() - num_interior_points; }
-        Index interior_points() const { return num_interior_points; }
+        Index num_ghosts() const { return ghost_points.num_points(); }
 
         template <class Distance>
         static void add_ghost_points(std::vector<VoronoiCell>& cells, const Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
 
+        Point<Atom> ghost(Index i) const { return ghost_points[i]; }
+
     protected:
 
         Index cell_index;
-        Index num_interior_points;
         RealVector dist_to_centers;
+        PointContainer<Atom> ghost_points;
 
     private:
 
