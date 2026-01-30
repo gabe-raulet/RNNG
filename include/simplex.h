@@ -25,7 +25,7 @@ struct Simplex
 
 struct WeightedSimplex : public Simplex
 {
-    WeightedSimplex(const Simplex& simplex, Real value) : Simplex(simplex), value(value) {}
+    WeightedSimplex(const IndexVector& verts, bool interior) : Simplex(verts), value(0), interior(interior) {}
 
     friend bool operator<(const WeightedSimplex& lhs, const WeightedSimplex& rhs) { return std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id); }
     friend bool operator==(const WeightedSimplex& lhs, const WeightedSimplex& rhs) { return (lhs.id == rhs.id); }
@@ -34,6 +34,7 @@ struct WeightedSimplex : public Simplex
     Real getvalue() const { return value; }
 
     Real value;
+    bool interior;
 };
 
 #include "simplex.hpp"

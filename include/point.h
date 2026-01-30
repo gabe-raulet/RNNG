@@ -2,6 +2,7 @@
 #define POINT_H_
 
 #include "utils.h"
+#include "simplex.h"
 
 template <class Atom_>
 class Point
@@ -12,11 +13,12 @@ class Point
         using AtomVector = std::vector<Atom>;
         using AtomIter = typename AtomVector::const_iterator;
 
-        Point(const Atom *mem, Index dim) : mem(mem), dim(dim), index(-1) {}
-        Point(const Atom *mem, Index dim, Index index) : mem(mem), dim(dim), index(index) {}
+        Point(const Atom *mem, Index dim, Index index) : mem(mem), dim(dim), index(index), container_offset(-1) {}
+        Point(const Atom *mem, Index dim, Index index, Index container_offset) : mem(mem), dim(dim), index(index), container_offset(container_offset) {}
 
         Index id() const { return index; }
         Index size() const { return dim; }
+        Index offset() const { return container_offset; }
         Atom operator[](Index i) const { return mem[i]; }
         explicit operator const Atom *() const { return mem; }
 
@@ -26,7 +28,7 @@ class Point
     private:
 
         const Atom *mem;
-        Index dim, index;
+        Index dim, index, container_offset;
 };
 
 template <class Atom_>
@@ -46,7 +48,7 @@ class PointContainer
         Index num_points() const { return ids.size(); }
         Index num_atoms() const { return data.size(); }
 
-        Point<Atom> operator[](Index i) const { return Point<Atom>(mem(i), size(i), id(i)); }
+        Point<Atom> operator[](Index i) const { return Point<Atom>(mem(i), size(i), id(i), i); }
 
         Index read_fvecs(const char *fname);
         Index read_seqs(const char *fname);
@@ -101,11 +103,15 @@ class VoronoiCell : public PointContainer<Atom_>
 
         Point<Atom> ghost(Index i) const { return ghost_points[i]; }
         const PointContainer<Atom>& ghosts() const { return ghost_points; }
+        const BoolVector& interiors() const { return interior; }
+
+        void set_interior(Index offset) { interior[offset] = true; }
 
     protected:
 
         Index cell_index;
         RealVector dist_to_centers;
+        BoolVector interior;
         PointContainer<Atom> ghost_points;
 
     private:
@@ -122,13 +128,24 @@ class VoronoiComplex : public PointContainer<Atom_>
 
         using Atom = Atom_;
 
-        VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius, Index maxdim) : PointContainer<Atom>(cell, cell.ghosts()), radius(radius), maxdim(maxdim), local(cell.num_points()) {}
+        VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius, Index maxdim);
+
+        template <class Distance>
+        void build_filtration(const Distance& distance, Real cover, Index leaf_size);
+
+        void write_filtration_file(const char *fname) const;
 
     private:
 
         Real radius;
         Index maxdim;
         Index local;
+        BoolVector interior;
+
+        std::vector<WeightedSimplex> filtration;
+
+        template <class Functor, class NeighborTest>
+        void bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborTest& neighbor, const Functor& functor) const;
 };
 
 template <class Atom_>

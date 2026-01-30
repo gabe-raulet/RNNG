@@ -175,9 +175,11 @@ int main_mpi(int argc, char *argv[])
     for (const VoronoiCell<Atom>& cell : mycells)
     {
         complexes.emplace_back(cell, radius, maxdim);
+        complexes.back().build_filtration(distance, cover, leaf_size);
     }
 
     mytime += MPI_Wtime();
+    mytottime += MPI_Wtime();
 
     if (verbosity >= 1)
     {
@@ -185,6 +187,35 @@ int main_mpi(int argc, char *argv[])
         if (!myrank) printf("[time=%.3f] built complexes\n", time);
         fflush(stdout);
     }
+
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
+
+        Index num_complexes = complexes.size();
+
+        for (Index i = 0; i < num_complexes; ++i)
+        {
+            std::stringstream ss;
+            ss << outfile << ".rank" << myrank << ".cell" << i << ".txt";
+            std::string s = ss.str();
+            complexes[i].write_filtration_file(s.c_str());
+        }
+
+        mytime += MPI_Wtime();
+
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) printf("[time=%.3f] wrote complex files\n", time);
+            fflush(stdout);
+        }
+    }
+
+    MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
+    fflush(stderr);
 
     return 0;
 }
