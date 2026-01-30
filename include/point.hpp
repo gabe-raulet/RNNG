@@ -1,3 +1,5 @@
+#include "search.h"
+
 template <class Atom_>
 PointContainer<Atom_>::PointContainer(const std::vector<Point<Atom>>& points)
 {
@@ -715,6 +717,178 @@ void VoronoiDiagram<Atom_>::coalesce_cells(std::vector<Cell>& mycells, MPI_Comm 
         }
 
         mycells.emplace_back(pts, dists, global_cell_indices[cell]);
+    }
+
+    MPI_Type_free(&MPI_POINT_ENVELOPE);
+}
+
+template <class Atom_>
+template <class Distance>
+void VoronoiCell<Atom_>::add_ghost_points(std::vector<VoronoiCell>& cells, const Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
+{
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    struct PointEnvelope
+    {
+        Index id;
+        Index size;
+        Real dist;
+
+        PointEnvelope() {}
+        PointEnvelope(Index id, Index size, Real dist) : id(id), size(size), dist(dist) {}
+    };
+
+    using PointEnvelopeVector = std::vector<PointEnvelope>;
+
+    MPI_Datatype MPI_POINT_ENVELOPE;
+    MPI_Type_contiguous(sizeof(PointEnvelope), MPI_CHAR, &MPI_POINT_ENVELOPE);
+    MPI_Type_commit(&MPI_POINT_ENVELOPE);
+
+    AtomVector sendbuf_atoms;
+    AtomVector recvbuf_atoms;
+
+    PointEnvelopeVector sendbuf_envs;
+    PointEnvelopeVector recvbuf_envs;
+
+    Index my_assigned_cells = cells.size();
+    Index my_assigned_points = 0;
+    Index my_assigned_atoms = 0;
+
+    for (const VoronoiCell& cell : cells)
+    {
+        my_assigned_points += cell.num_points();
+        my_assigned_atoms += cell.num_atoms();
+    }
+
+    sendbuf_atoms.reserve(my_assigned_atoms);
+    sendbuf_envs.reserve(my_assigned_points);
+
+    AtomVector mycenters_buf;
+    IndexVector mycenters_sizes;
+    IndexVector mycenters_ids;
+
+    std::vector<CoverTree> trees;
+
+    for (const VoronoiCell& cell : cells)
+    {
+        Index cell_point_count = cell.num_points();
+
+        for (Index i = 0; i < cell_point_count; ++i)
+        {
+            Point<Atom> p = cell[i];
+            sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_centers[i]);
+            sendbuf_atoms.insert(sendbuf_atoms.end(), p.begin(), p.end());
+        }
+
+        if (cell_point_count >= 1)
+        {
+            Point<Atom> p = cell[0];
+
+            mycenters_ids.push_back(mycenters_ids.size());
+            mycenters_sizes.push_back(p.size());
+            std::copy(p.begin(), p.end(), std::back_inserter(mycenters_buf));
+        }
+
+        trees.emplace_back(cover, leaf_size);
+        trees.back().build(cell, distance);
+    }
+
+    PointContainer<Atom> mycenters(mycenters_buf, mycenters_sizes, mycenters_ids);
+
+    std::vector<IndexSet> treeids_set(my_assigned_cells);
+
+    for (Index cell_index = 0; cell_index < my_assigned_cells; ++cell_index)
+    {
+        treeids_set[cell_index].insert(cells[cell_index].ids.begin(), cells[cell_index].ids.end());
+    }
+
+    CoverTree mycentertree(cover, 1);
+    mycentertree.build(mycenters, distance);
+
+    MPI_Request reqs[8];
+
+    int sendcount, sendcount_atoms;
+    int recvcount, recvcount_atoms;
+
+    int sendtarg = myrank;
+    int recvtarg;
+
+    int recvrank = (myrank+1)%nprocs;
+    int sendrank = (myrank-1+nprocs)%nprocs;
+
+    int sendcount_buf[2], recvcount_buf[2];
+
+    IndexVector ghostcells;
+    auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist) { ghostcells.push_back(p.id()); };
+
+    for (int step = 0; step <= nprocs; ++step)
+    {
+
+        recvtarg = (sendtarg+1)%nprocs;
+        sendcount = sendbuf_envs.size();
+        sendcount_atoms = sendbuf_atoms.size();
+
+        sendcount_buf[0] = sendcount;
+        sendcount_buf[1] = sendcount_atoms;
+
+        double t = -MPI_Wtime();
+        MPI_Irecv(recvcount_buf, 2, MPI_INT, recvrank, myrank,   comm, &reqs[0]);
+        MPI_Isend(sendcount_buf, 2, MPI_INT, sendrank, sendrank, comm, &reqs[1]);
+        MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
+        t += MPI_Wtime();
+
+        recvcount = recvcount_buf[0];
+        recvcount_atoms = recvcount_buf[1];
+
+        recvbuf_atoms.resize(recvcount_atoms);
+        recvbuf_envs.resize(recvcount);
+
+        MPI_Irecv(recvbuf_atoms.data(), recvcount_atoms, MPI_ATOM, recvrank, myrank+nprocs, comm, &reqs[0]);
+        MPI_Isend(sendbuf_atoms.data(), sendcount_atoms, MPI_ATOM, sendrank, sendrank+nprocs, comm, &reqs[1]);
+
+        MPI_Irecv(recvbuf_envs.data(), recvcount, MPI_POINT_ENVELOPE, recvrank, myrank+2*nprocs, comm, &reqs[2]);
+        MPI_Isend(sendbuf_envs.data(), sendcount, MPI_POINT_ENVELOPE, sendrank, sendrank+2*nprocs, comm, &reqs[3]);
+
+        Index targsize = sendcount;
+
+        const Atom* mem = sendbuf_atoms.data();
+
+        for (Index i = 0; i < targsize; ++i)
+        {
+            Index dim = sendbuf_envs[i].size;
+            Index index = sendbuf_envs[i].id;
+            Real dist = sendbuf_envs[i].dist;
+
+            Point<Atom> query(mem, dim, index);
+            mem += dim;
+
+            ghostcells.clear();
+            mycentertree.radius_query(mycenters, distance, query, dist + 2*radius, functor);
+
+            if (ghostcells.empty())
+                continue;
+
+            for (Index cell : ghostcells)
+                if (cells[cell].num_points() != 0 && !treeids_set[cell].contains(index))
+                {
+                    if (trees[cell].has_radius_neighbor(cells[cell], distance, query, radius))
+                    {
+                        cells[cell].add_ghost_point(query);
+                    }
+
+                    treeids_set[cell].insert(index);
+                }
+        }
+
+        MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
+
+        sendtarg = recvtarg;
+        sendbuf_atoms.swap(recvbuf_atoms);
+        sendbuf_envs.swap(recvbuf_envs);
     }
 
     MPI_Type_free(&MPI_POINT_ENVELOPE);

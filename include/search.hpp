@@ -264,6 +264,47 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance
 }
 
 template <class Atom, class Distance>
+bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius) const
+{
+    if (points.num_points() == 0)
+        return false;
+
+    IndexQueue queue = {0};
+
+    while (!queue.empty())
+    {
+        Index u = queue.front(); queue.pop_front();
+
+        auto first = child_begin(u);
+        auto last = child_end(u);
+
+        if (first == last)
+        {
+            Index leaf = centers[u];
+            Real dist = distance(points[leaf], query);
+
+            if (dist <= radius)
+            {
+                return true;
+            }
+        }
+        else
+        {
+            for (; first != last; ++first)
+            {
+                Index child = *first;
+                Real epsilon = radii[child] + radius;
+
+                if (distance(points[centers[child]], query) <= epsilon)
+                    queue.push_back(child);
+            }
+        }
+    }
+
+    return false;
+}
+
+template <class Atom, class Distance>
 void BruteForce::build(const PointContainer<Atom>& points, const Distance& distance)
 {
     return;

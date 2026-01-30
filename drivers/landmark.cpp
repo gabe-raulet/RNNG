@@ -154,99 +154,92 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
-    /* std::vector<CoverTree> trees; */
-    /* Index num_cells = mycells.size(); */
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    VoronoiCell<Atom>::add_ghost_points(mycells, distance, radius, cover, leaf_size, comm);
+    mytime += MPI_Wtime();
 
-    /* for (Index i = 0; i < num_cells; ++i) */
-    /* { */
-        /* trees.emplace_back(cover, leaf_size); */
-        /* trees.back().build(mycells[i], distance); */
-    /* } */
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) printf("[time=%.3f] added ghost points\n", time);
+        fflush(stdout);
+    }
 
-    //std::vector<IndexVector> coalesced_indices;
-    //diagram.coalesce_indices(coalesced_indices);
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
 
-    //IndexVector cell_point_counts(num_centers, 0), cell_atom_counts(num_centers, 0);
+    using Edge = std::tuple<Index, Index, Real>;
+    using EdgeVector = std::vector<Edge>;
 
-    //for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
-    //{
-    //    for (Index id : coalesced_indices[cell_index])
-    //    {
-    //        cell_point_counts[cell_index]++;
-    //        cell_atom_counts[cell_index] += mypoints[id-myoffset].size();
-    //    }
-    //}
+    EdgeVector myedges;
 
-    //MPI_Allreduce(MPI_IN_PLACE, cell_point_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
-    //MPI_Allreduce(MPI_IN_PLACE, cell_atom_counts.data(), (int)num_centers, MPI_INDEX, MPI_SUM, comm);
+    auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
+    {
+        myedges.emplace_back(q.id(), p.id(), dist);
+    };
 
-    //std::vector<int> dests(num_centers);
-    //IndexPairVector pairs;
+    for (const VoronoiCell<Atom>& cell : mycells)
+    {
+        CoverTree tree(cover, leaf_size);
+        tree.build(cell, distance);
 
-    //for (Index cell = 0; cell < num_centers; ++cell)
-    //{
-    //    pairs.emplace_back(cell_atom_counts[cell], cell);
-    //}
+        Index n = cell.interior_points();
 
-    //std::sort(pairs.rbegin(), pairs.rend());
+        for (Index i = 0; i < n; ++i)
+        {
+            tree.radius_query(cell, distance, cell[i], radius, functor);
+        }
+    }
 
-    //IndexVector bins(nprocs, 0);
+    mytime += MPI_Wtime();
 
-    //for (const auto& [size, cell] : pairs)
-    //{
-    //    int dest = std::min_element(bins.begin(), bins.end()) - bins.begin();
-    //    bins[dest] += size;
-    //    dests[cell] = dest;
-    //}
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) printf("[time=%.3f] found neighbors\n", time);
+        fflush(stdout);
+    }
 
-    //if (!myrank)
-    //{
-    //    for (int i = 0; i < nprocs; ++i)
-    //    {
-    //        Index my_assigned_points = 0;
-    //        Index my_assigned_atoms = 0;
-    //        IndexVector my_assigned_cells;
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
 
-    //        for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
-    //        {
-    //            if (dests[cell_index] == i)
-    //            {
-    //                my_assigned_points += cell_point_counts[cell_index];
-    //                my_assigned_atoms += cell_atom_counts[cell_index];
-    //                my_assigned_cells.push_back(cell_index);
-    //            }
-    //        }
+    Graph graph(myedges, num_points);
+    graph.redistribute_edges(comm);
 
-    //        printf("[rank=%d,points=%lld,atoms=%lld] cells=%s\n", i, my_assigned_points, my_assigned_atoms, CONTAINER_REPR(my_assigned_cells));
-    //    }
-    //}
+    mytime += MPI_Wtime();
+    mytottime += MPI_Wtime();
 
+    if (verbosity >= 1)
+    {
+        Index num_edges;
+        Index my_num_edges = graph.num_edges();
 
-    //std::vector<Cell> cells;
+        MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
 
-    //MPI_Barrier(comm);
-    //mytime = -MPI_Wtime();
-    //diagram.coalesce_cells(cells);
-    //mytime += MPI_Wtime();
+        if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+        fflush(stderr);
+    }
 
-    //if (verbosity >= 1)
-    //{
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //    if (!myrank) printf("[time=%.3f] coalesced voronoi cells\n", time);
-    //    fflush(stdout);
-    //}
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
+        graph.write_file(outfile, comm);
+        mytime += MPI_Wtime();
 
-    //MPI_Barrier(comm);
-    //mytime = -MPI_Wtime();
-    //diagram.add_ghost_points(cells, radius, cover, leaf_size);
-    //mytime += MPI_Wtime();
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) fprintf(stderr, "[time=%.3f] wrote edges to file '%s'\n", time, outfile);
+            fflush(stderr);
+        }
+    }
 
-    //if (verbosity >= 1)
-    //{
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //    if (!myrank) printf("[time=%.3f] added ghost points\n", time);
-    //    fflush(stdout);
-    //}
+    MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
+    fflush(stderr);
 
     //MPI_Barrier(comm);
     //mytime = -MPI_Wtime();
