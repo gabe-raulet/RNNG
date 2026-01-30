@@ -99,6 +99,7 @@ class VoronoiCell : public PointContainer<Atom_>
         static void add_ghost_points(std::vector<VoronoiCell>& cells, const Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
 
         Point<Atom> ghost(Index i) const { return ghost_points[i]; }
+        const PointContainer<Atom>& ghosts() const { return ghost_points; }
 
     protected:
 

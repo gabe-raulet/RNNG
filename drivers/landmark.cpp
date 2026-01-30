@@ -184,19 +184,8 @@ int main_mpi(int argc, char *argv[])
         CoverTree tree(cover, leaf_size);
         tree.build(cell, distance);
 
-        Index n = cell.num_points();
-
-        for (Index i = 0; i < n; ++i)
-        {
-            tree.radius_query(cell, distance, cell[i], radius, functor);
-        }
-
-        n = cell.num_ghosts();
-
-        for (Index i = 0; i < n; ++i)
-        {
-            tree.radius_query(cell, distance, cell.ghost(i), radius, functor);
-        }
+        tree.radius_query_batched(cell, distance, cell, radius, functor);
+        tree.radius_query_batched(cell, distance, cell.ghosts(), radius, functor);
     }
 
     mytime += MPI_Wtime();

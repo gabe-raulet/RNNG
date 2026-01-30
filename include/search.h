@@ -47,6 +47,9 @@ class CoverTree : public Search<CoverTree>
         template <class Atom, class Distance, class Functor>
         Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
 
+        template <class Atom, class Distance, class Functor>
+        Index radius_query_batched(const PointContainer<Atom>& points, const Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const;
+
         template <class Atom, class Distance>
         bool has_radius_neighbor(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius) const;
 

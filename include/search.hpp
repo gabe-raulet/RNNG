@@ -263,6 +263,82 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance
     return found;
 }
 
+template <class Atom, class Distance, class Functor>
+Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, const Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const
+{
+    if (points.num_points() == 0)
+        return 0;
+
+    Index n = batch.num_points();
+    Index found = 0;
+
+    using NeighPair = std::pair<Index, IndexVector>;
+    using NeighPairQueue = std::deque<NeighPair>;
+
+    NeighPairQueue queue;
+    queue.emplace_back(0, IndexVector());
+
+    queue.back().second.resize(n);
+    std::iota(queue.back().second.begin(), queue.back().second.end(), (Index)0);
+
+    /* std::vector<IndexVector> neighs(n); */
+    /* std::vector<RealVector> weights(n); */
+
+    while (!queue.empty())
+    {
+        Index u = queue.front().first;
+        IndexVector ids = queue.front().second;
+        queue.pop_front();
+
+        auto first = child_begin(u);
+        auto last = child_end(u);
+
+        if (first == last)
+        {
+            Index leaf = centers[u];
+
+            for (Index q : ids)
+            {
+                Real dist = distance(points[leaf], batch[q]);
+
+                if (dist <= radius)
+                {
+                    functor(points[leaf], batch[q], dist);
+                    found++;
+                }
+            }
+        }
+        else
+        {
+            for (; first != last; ++first)
+            {
+                Index child = *first;
+                Real epsilon = radii[child] + radius;
+
+                IndexVector newids;
+
+                for (Index q : ids)
+                {
+                    if (distance(points[centers[child]], batch[q]) <= epsilon)
+                        newids.push_back(q);
+                }
+
+                if (!newids.empty())
+                {
+                    queue.emplace_back(child, newids);
+                }
+            }
+        }
+    }
+
+    /* for (Index q = 0; q < n; ++q) */
+    /* { */
+        /* graph.add_neighbors(batch_indices[q], neighs[q], weights[q]); */
+    /* } */
+
+    return found;
+}
+
 template <class Atom, class Distance>
 bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius) const
 {
