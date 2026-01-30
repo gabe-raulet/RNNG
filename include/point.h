@@ -41,6 +41,7 @@ class PointContainer
         PointContainer(const std::vector<Point<Atom>>& points);
         PointContainer(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices);
         PointContainer(const AtomVector& atoms, Index size, Index dim, const IndexVector& indices);
+        PointContainer(const PointContainer& lhs, const PointContainer& rhs);
 
         Index num_points() const { return ids.size(); }
         Index num_atoms() const { return data.size(); }
@@ -112,6 +113,22 @@ class VoronoiCell : public PointContainer<Atom_>
         using PointContainer<Atom>::data;
         using PointContainer<Atom>::offsets;
         using PointContainer<Atom>::ids;
+};
+
+template <class Atom_>
+class VoronoiComplex : public PointContainer<Atom_>
+{
+    public:
+
+        using Atom = Atom_;
+
+        VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius, Index maxdim) : PointContainer<Atom>(cell, cell.ghosts()), radius(radius), maxdim(maxdim), local(cell.num_points()) {}
+
+    private:
+
+        Real radius;
+        Index maxdim;
+        Index local;
 };
 
 template <class Atom_>

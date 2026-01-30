@@ -39,6 +39,34 @@ PointContainer<Atom_>::PointContainer(const AtomVector& atoms, Index size, Index
 }
 
 template <class Atom_>
+PointContainer<Atom_>::PointContainer(const PointContainer& lhs, const PointContainer& rhs)
+{
+    data.reserve(lhs.num_atoms() + rhs.num_atoms());
+    offsets.reserve(lhs.num_points() + rhs.num_points() + 1);
+    ids.reserve(lhs.num_points() + rhs.num_points());
+
+    offsets.push_back(0);
+
+    for (Index i = 0; i < lhs.num_points(); ++i)
+    {
+        Point<Atom> p = lhs[i];
+
+        data.insert(data.end(), p.begin(), p.end());
+        offsets.push_back(data.size());
+        ids.push_back(p.id());
+    }
+
+    for (Index i = 0; i < rhs.num_points(); ++i)
+    {
+        Point<Atom> p = rhs[i];
+
+        data.insert(data.end(), p.begin(), p.end());
+        offsets.push_back(data.size());
+        ids.push_back(p.id());
+    }
+}
+
+template <class Atom_>
 void PointContainer<Atom_>::init(const AtomVector& atoms, const IndexVector& sizes, const IndexVector& indices)
 {
     Index point_count = sizes.size();

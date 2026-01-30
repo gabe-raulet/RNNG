@@ -167,84 +167,24 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
-    /* MPI_Barrier(comm); */
-    /* mytime = -MPI_Wtime(); */
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
 
-    /* for (const VoronoiCell<Atom>& cell : mycells) */
-    /* { */
-        /* complexes.emplace_back(cell, radius, maxdim); */
-    /* } */
+    std::vector<VoronoiComplex<Atom>> complexes;
 
-    /* mytime += MPI_Wtime(); */
+    for (const VoronoiCell<Atom>& cell : mycells)
+    {
+        complexes.emplace_back(cell, radius, maxdim);
+    }
 
-    //using Edge = std::tuple<Index, Index, Real>;
-    //using EdgeVector = std::vector<Edge>;
+    mytime += MPI_Wtime();
 
-    //EdgeVector myedges;
-
-    //auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
-    //{
-    //    myedges.emplace_back(q.id(), p.id(), dist);
-    //};
-
-    //for (const VoronoiCell<Atom>& cell : mycells)
-    //{
-    //    CoverTree tree(cover, leaf_size);
-    //    tree.build(cell, distance);
-
-    //    tree.radius_query_batched(cell, distance, cell, radius, functor);
-    //    tree.radius_query_batched(cell, distance, cell.ghosts(), radius, functor);
-    //}
-
-    //mytime += MPI_Wtime();
-
-    //if (verbosity >= 1)
-    //{
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //    if (!myrank) printf("[time=%.3f] found neighbors\n", time);
-    //    fflush(stdout);
-    //}
-
-    //MPI_Barrier(comm);
-    //mytime = -MPI_Wtime();
-
-    //Graph graph(myedges, num_points);
-    //graph.redistribute_edges(comm);
-
-    //mytime += MPI_Wtime();
-    //mytottime += MPI_Wtime();
-
-    //if (verbosity >= 1)
-    //{
-    //    Index num_edges;
-    //    Index my_num_edges = graph.num_edges();
-
-    //    MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
-    //    MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-
-    //    if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
-    //    fflush(stderr);
-    //}
-
-    //if (outfile)
-    //{
-    //    MPI_Barrier(comm);
-    //    mytime = -MPI_Wtime();
-    //    graph.write_file(outfile, comm);
-    //    mytime += MPI_Wtime();
-
-    //    if (verbosity >= 1)
-    //    {
-    //        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //        if (!myrank) fprintf(stderr, "[time=%.3f] wrote edges to file '%s'\n", time, outfile);
-    //        fflush(stderr);
-    //    }
-    //}
-
-    //MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    //if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
-    //fflush(stderr);
-
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        if (!myrank) printf("[time=%.3f] built complexes\n", time);
+        fflush(stdout);
+    }
 
     return 0;
 }
