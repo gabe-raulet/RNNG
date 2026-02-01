@@ -10,13 +10,13 @@ class Search
     public:
 
         template <class Atom, class Distance>
-        void build(const PointContainer<Atom>& points, const Distance& distance)
+        void build(const PointContainer<Atom>& points, Distance& distance)
         {
             static_cast<T*>(this)->build(points, distance);
         }
 
         template <class Atom, class Distance, class Functor>
-        Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, const Functor& functor) const
+        Index radius_query(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, const Functor& functor) const
         {
             return static_cast<T*>(this)->radius_query(points, distance, query, functor);
         }
@@ -29,10 +29,10 @@ class BruteForce : public Search<BruteForce>
         BruteForce() {}
 
         template <class Atom, class Distance>
-        void build(const PointContainer<Atom>& points, const Distance& distance);
+        void build(const PointContainer<Atom>& points, Distance& distance);
 
         template <class Atom, class Distance, class Functor>
-        Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
+        Index radius_query(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
 };
 
 class CoverTree : public Search<CoverTree>
@@ -42,16 +42,16 @@ class CoverTree : public Search<CoverTree>
         CoverTree(Real cover=1.5, Index leaf_size=1) : cover(cover), leaf_size(leaf_size) {}
 
         template <class Atom, class Distance>
-        void build(const PointContainer<Atom>& points, const Distance& distance);
+        void build(const PointContainer<Atom>& points, Distance& distance);
 
         template <class Atom, class Distance, class Functor>
-        Index radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
+        Index radius_query(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const;
 
         template <class Atom, class Distance, class Functor>
-        Index radius_query_batched(const PointContainer<Atom>& points, const Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const;
+        Index radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const;
 
         template <class Atom, class Distance>
-        bool has_radius_neighbor(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius) const;
+        bool has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius) const;
 
     private:
 

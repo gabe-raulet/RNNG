@@ -3,7 +3,7 @@
 #include <assert.h>
 
 template <class Atom, class Distance>
-void CoverTree::build(const PointContainer<Atom>& points, const Distance& distance)
+void CoverTree::build(const PointContainer<Atom>& points, Distance& distance)
 {
     if (points.num_points() == 0)
         return;
@@ -33,7 +33,7 @@ void CoverTree::build(const PointContainer<Atom>& points, const Distance& distan
 
         Index size() const { return ids.size(); }
 
-        void compute_child_hubs(const PointContainer<Atom>& points, const Distance& distance, Real cover, Index leaf_size, Real maxdist)
+        void compute_child_hubs(const PointContainer<Atom>& points, Distance& distance, Real cover, Index leaf_size, Real maxdist)
         {
             Real sep;
             Index m = size();
@@ -221,7 +221,7 @@ void CoverTree::allocate(Index num_verts)
 }
 
 template <class Atom, class Distance, class Functor>
-Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const
+Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const
 {
     if (points.num_points() == 0)
         return 0;
@@ -264,7 +264,7 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, const Distance
 }
 
 template <class Atom, class Distance, class Functor>
-Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, const Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const
+Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& batch, Real radius, const Functor& functor) const
 {
     if (points.num_points() == 0)
         return 0;
@@ -340,7 +340,7 @@ Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, const 
 }
 
 template <class Atom, class Distance>
-bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius) const
+bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius) const
 {
     if (points.num_points() == 0)
         return false;
@@ -381,13 +381,13 @@ bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, const Di
 }
 
 template <class Atom, class Distance>
-void BruteForce::build(const PointContainer<Atom>& points, const Distance& distance)
+void BruteForce::build(const PointContainer<Atom>& points, Distance& distance)
 {
     return;
 }
 
 template <class Atom, class Distance, class Functor>
-Index BruteForce::radius_query(const PointContainer<Atom>& points, const Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const
+Index BruteForce::radius_query(const PointContainer<Atom>& points, Distance& distance, const Point<Atom>& query, Real radius, const Functor& functor) const
 {
     Index found = 0;
     Index num_points = points.num_points();

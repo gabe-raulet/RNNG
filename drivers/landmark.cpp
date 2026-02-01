@@ -31,13 +31,17 @@ int verbosity = 1;
 template <class Atom>
 struct L2Distance
 {
-    Real operator()(const Point<Atom>& p, const Point<Atom>& q) const;
+    Index dist_comps = 0;
+
+    Real operator()(const Point<Atom>& p, const Point<Atom>& q);
 };
 
 template <class Atom>
 struct EditDistance
 {
-    Real operator()(const Point<Atom>& p, const Point<Atom>& q) const;
+    Index dist_comps = 0;
+
+    Real operator()(const Point<Atom>& p, const Point<Atom>& q);
 };
 
 void parse_cmdline(int argc, char *argv[]);
@@ -237,6 +241,27 @@ int main_mpi(int argc, char *argv[])
     if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
     fflush(stderr);
 
+    if (verbosity >= 2)
+    {
+        IndexVector dist_comps;
+
+        if (!myrank) dist_comps.resize(nprocs);
+
+        MPI_Gather(&distance.dist_comps, 1, MPI_INDEX, dist_comps.data(), 1, MPI_INDEX, 0, comm);
+
+        if (!myrank)
+        {
+            Index total_dist_comps = std::accumulate(dist_comps.begin(), dist_comps.end(), (Index)0);
+            Index average_dist_comps = total_dist_comps / nprocs;
+
+            fprintf(stderr, "[total_dist_comps=%s,average_dist_comps=%s]\n", LARGE(total_dist_comps), LARGE(average_dist_comps));
+            for (int i = 0; i < nprocs; ++i)
+            {
+                fprintf(stderr, "[rank=%d] number of distance computations = %s\n", i, LARGE(dist_comps[i]));
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -303,7 +328,7 @@ void parse_cmdline(int argc, char *argv[])
 
 
 template <class Atom>
-Real L2Distance<Atom>::operator()(const Point<Atom>& p, const Point<Atom>& q) const
+Real L2Distance<Atom>::operator()(const Point<Atom>& p, const Point<Atom>& q)
 {
     Index dim = p.size();
     assert((dim == q.size()));
@@ -317,11 +342,12 @@ Real L2Distance<Atom>::operator()(const Point<Atom>& p, const Point<Atom>& q) co
         val += delta*delta;
     }
 
+    dist_comps++;
     return std::sqrt(val);
 }
 
 template <class Atom>
-Real EditDistance<Atom>::operator()(const Point<Atom>& s, const Point<Atom>& t) const
+Real EditDistance<Atom>::operator()(const Point<Atom>& s, const Point<Atom>& t)
 {
     Index m = s.size();
     Index n = t.size();
@@ -347,5 +373,6 @@ Real EditDistance<Atom>::operator()(const Point<Atom>& s, const Point<Atom>& t) 
         std::swap(v0, v1);
     }
 
+    dist_comps++;
     return static_cast<Real>(v0[n]);
 }

@@ -99,7 +99,7 @@ class VoronoiCell : public PointContainer<Atom_>
         Index num_ghosts() const { return ghost_points.num_points(); }
 
         template <class Distance>
-        static void add_ghost_points(std::vector<VoronoiCell>& cells, const Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
+        static void add_ghost_points(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
 
         Point<Atom> ghost(Index i) const { return ghost_points[i]; }
         const PointContainer<Atom>& ghosts() const { return ghost_points; }
@@ -131,7 +131,7 @@ class VoronoiComplex : public PointContainer<Atom_>
         VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius, Index maxdim);
 
         template <class Distance>
-        void build_filtration(const Distance& distance, Real cover, Index leaf_size);
+        void build_filtration(Distance& distance, Real cover, Index leaf_size);
 
         void write_filtration_file(const char *fname, bool use_ids=true) const;
 
@@ -158,7 +158,7 @@ class VoronoiDiagram : public PointContainer<Atom_>
         using Cell = VoronoiCell<Atom>;
 
         template <class Distance>
-        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, const Distance& distance);
+        VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, Distance& distance);
 
         void coalesce_cells(std::vector<Cell>& mycells, MPI_Comm comm) const;
 
