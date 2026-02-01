@@ -162,7 +162,7 @@ int main_mpi(int argc, char *argv[])
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) printf("[time=%.3f] added ghost points\n", time);
+        if (!myrank) fprintf(stderr, "[time=%.3f] added ghost points\n", time);
         fflush(stdout);
     }
 
@@ -193,7 +193,7 @@ int main_mpi(int argc, char *argv[])
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) printf("[time=%.3f] found neighbors\n", time);
+        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors\n", time);
         fflush(stdout);
     }
 
