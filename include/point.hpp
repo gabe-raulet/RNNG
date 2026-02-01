@@ -1092,7 +1092,7 @@ void VoronoiComplex<Atom_>::bron_kerbosch(IndexVector& current, const IndexVecto
 }
 
 template <class Atom_>
-void VoronoiComplex<Atom_>::write_filtration_file(const char *fname) const
+void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
 {
     FILE *f;
 
@@ -1100,7 +1100,28 @@ void VoronoiComplex<Atom_>::write_filtration_file(const char *fname) const
 
     for (const auto& s : filtration)
     {
-        fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
+        if (use_ids)
+        {
+            fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
+        }
+        else
+        {
+            IndexVector verts = s.getverts();
+            Index n = verts.size();
+
+            std::stringstream ss;
+            ss << "<";
+
+            for (Index i = 0; i < n-1; ++i)
+            {
+                ss << verts[i] << ",";
+            }
+
+            ss << verts[n-1] << ">";
+
+            std::string st = ss.str();
+            fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
+        }
     }
 
     fclose(f);

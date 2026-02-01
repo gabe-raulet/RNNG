@@ -133,7 +133,7 @@ class VoronoiComplex : public PointContainer<Atom_>
         template <class Distance>
         void build_filtration(const Distance& distance, Real cover, Index leaf_size);
 
-        void write_filtration_file(const char *fname) const;
+        void write_filtration_file(const char *fname, bool use_ids=true) const;
 
     private:
 
