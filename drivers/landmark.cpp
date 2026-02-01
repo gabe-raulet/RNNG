@@ -73,6 +73,9 @@ int main_mpi(int argc, char *argv[])
 {
     double mytime, time;
     double mytottime, tottime;
+    Index mydistcomps, distcomps;
+    Index mytotdistcomps, totdistcomps;
+    Index dist_comps_start, dist_comps_end;
 
     Index num_points, mysize, myoffset;
     PointContainer<Atom> mypoints;
@@ -132,14 +135,20 @@ int main_mpi(int argc, char *argv[])
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
+    dist_comps_start = distance.dist_comps;
     VoronoiDiagram<Atom> diagram(mypoints, centers, distance);
-
+    dist_comps_end = distance.dist_comps;
+    
     mytime += MPI_Wtime();
+    mydistcomps = dist_comps_end - dist_comps_start;
 
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning\n", time);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning [dist_comps=%s,average_dist_comps=%s]\n", time, LARGE(distcomps), LARGE(distcomps/nprocs));
+
         fflush(stdout);
     }
 
@@ -160,18 +169,26 @@ int main_mpi(int argc, char *argv[])
 
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
+
+    dist_comps_start = distance.dist_comps;
     VoronoiCell<Atom>::add_ghost_points(mycells, distance, radius, cover, leaf_size, comm);
+    dist_comps_end = distance.dist_comps;
+
     mytime += MPI_Wtime();
+    mydistcomps = dist_comps_end - dist_comps_start;
 
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] added ghost points\n", time);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] added ghost points [dist_comps=%s,average_dist_comps=%s]\n", time, LARGE(distcomps), LARGE(distcomps/nprocs));
         fflush(stdout);
     }
 
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
+    dist_comps_start = distance.dist_comps;
 
     using Edge = std::tuple<Index, Index, Real>;
     using EdgeVector = std::vector<Edge>;
@@ -192,12 +209,17 @@ int main_mpi(int argc, char *argv[])
         tree.radius_query_batched(cell, distance, cell.ghosts(), radius, functor);
     }
 
+    dist_comps_end = distance.dist_comps;
+
     mytime += MPI_Wtime();
+    mydistcomps = dist_comps_end - dist_comps_start;
 
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors\n", time);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [dist_comps=%s,average_dist_comps=%s]\n", time, LARGE(distcomps), LARGE(distcomps/nprocs));
         fflush(stdout);
     }
 
@@ -237,30 +259,13 @@ int main_mpi(int argc, char *argv[])
         }
     }
 
+    mytotdistcomps = distance.dist_comps;
+
     MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
+    MPI_Reduce(&mytotdistcomps, &totdistcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete [dist_comps=%s,average_dist_comps=%s]\n", tottime, LARGE(totdistcomps), LARGE(totdistcomps/nprocs));
     fflush(stderr);
-
-    if (verbosity >= 2)
-    {
-        IndexVector dist_comps;
-
-        if (!myrank) dist_comps.resize(nprocs);
-
-        MPI_Gather(&distance.dist_comps, 1, MPI_INDEX, dist_comps.data(), 1, MPI_INDEX, 0, comm);
-
-        if (!myrank)
-        {
-            Index total_dist_comps = std::accumulate(dist_comps.begin(), dist_comps.end(), (Index)0);
-            Index average_dist_comps = total_dist_comps / nprocs;
-
-            fprintf(stderr, "[total_dist_comps=%s,average_dist_comps=%s]\n", LARGE(total_dist_comps), LARGE(average_dist_comps));
-            for (int i = 0; i < nprocs; ++i)
-            {
-                fprintf(stderr, "[rank=%d] number of distance computations = %s\n", i, LARGE(dist_comps[i]));
-            }
-        }
-    }
 
     return 0;
 }
