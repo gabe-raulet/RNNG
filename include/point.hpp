@@ -1133,7 +1133,7 @@ VoronoiComplex<Atom_>::VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius
 
 template <class Atom_>
 template <class Distance>
-void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real cover, Index leaf_size)
+void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Index num_verts, Real cover, Index leaf_size)
 {
     using WeightMap = std::unordered_map<Index, Real>;
     using WeightMapVector = std::vector<WeightMap>;
@@ -1174,6 +1174,10 @@ void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real cover, Ind
 
         filtration.emplace_back(s, is_interior);
         const WeightedSimplex& sigma = filtration.back();
+        /* if (s[0] == 1872 && s[1] == 2477 && s[2] == 3967) */
+        /* { */
+            /* std::cout << sigma.getid() << "\t" << CONTAINER_REPR(s) << "\t" << sigma.get_simplex_repr(num_verts) << std::endl; */
+        /* } */
 
         if (p == 0) weights[0].insert({sigma.getid(), 0.});
         else if (p == 1) weights[1].insert({sigma.getid(), distance((*this)[s[0]], (*this)[s[1]])});
@@ -1194,7 +1198,7 @@ void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real cover, Ind
             weight = 0;
             Simplex sigma(id);
             IndexVector facet_ids;
-            sigma.get_facet_ids(facet_ids);
+            sigma.get_facet_ids(facet_ids, n);
 
             for (Index fid : facet_ids)
             {
@@ -1213,9 +1217,7 @@ void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real cover, Ind
 
     for (auto& s : filtration)
     {
-        std::cout << s.get_simplex_repr() << std::endl;
-
-        IndexVector verts = s.getverts();
+        IndexVector verts = s.getverts(n);
 
         for (Index& v : verts)
         {
@@ -1265,7 +1267,7 @@ void VoronoiComplex<Atom_>::bron_kerbosch(IndexVector& current, const IndexVecto
 }
 
 template <class Atom_>
-void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
+void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, Index num_verts, bool use_ids) const
 {
     FILE *f;
 
@@ -1279,7 +1281,7 @@ void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_id
         }
         else
         {
-            std::string st = s.get_simplex_repr();
+            std::string st = s.get_simplex_repr(num_verts);
             fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
         }
     }

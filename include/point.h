@@ -89,7 +89,7 @@ class PointContainer
 
             if (!(i >= 0 && i < ids.size()))
             {
-                printf("assertion error will be on i=%lld [ids.size()=%llu]\n", i, ids.size());
+                printf("assertion error will be on i=%lld [ids.size()=%zu]\n", i, ids.size());
                 fflush(stdout);
             }
 
@@ -147,9 +147,9 @@ class VoronoiComplex : public PointContainer<Atom_>
         VoronoiComplex(const VoronoiCell<Atom>& cell, Real radius, Index maxdim);
 
         template <class Distance>
-        void build_filtration(Distance& distance, Real cover, Index leaf_size);
+        void build_filtration(Distance& distance, Index num_verts, Real cover, Index leaf_size);
 
-        void write_filtration_file(const char *fname, bool use_ids=true) const;
+        void write_filtration_file(const char *fname, Index num_verts, bool use_ids=true) const;
 
         Index num_simplices() const { return filtration.size(); }
 

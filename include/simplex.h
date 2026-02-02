@@ -15,14 +15,14 @@ struct Simplex
     Index getid() const;
     Index getuid() const;
     Index getdim() const;
-    IndexVector getverts(Index n = std::numeric_limits<Index>::max()) const;
+    IndexVector getverts(Index n) const;
 
-    void get_facets(std::vector<Simplex>& facets) const;
-    void get_facet_ids(IndexVector& ids) const;
+    void get_facets(std::vector<Simplex>& facets, Index n) const;
+    void get_facet_ids(IndexVector& ids, Index n) const;
 
     Index id;
 
-    std::string get_simplex_repr(Index n = std::numeric_limits<Index>::max()) const;
+    std::string get_simplex_repr(Index n) const;
 };
 
 struct WeightedSimplex : public Simplex

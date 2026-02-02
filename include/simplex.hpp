@@ -78,11 +78,11 @@ IndexVector Simplex::getverts(Index n) const
     return vertices;
 }
 
-void Simplex::get_facets(std::vector<Simplex>& facets) const
+void Simplex::get_facets(std::vector<Simplex>& facets, Index n) const
 {
     facets.clear();
 
-    IndexVector vertices = getverts();
+    IndexVector vertices = getverts(n);
     Index dim = vertices.size()-1;
 
     for (Index i = 0; i <= dim; ++i)
@@ -97,12 +97,12 @@ void Simplex::get_facets(std::vector<Simplex>& facets) const
     }
 }
 
-void Simplex::get_facet_ids(IndexVector& ids) const
+void Simplex::get_facet_ids(IndexVector& ids, Index n) const
 {
     ids.clear();
 
     std::vector<Simplex> facets;
-    get_facets(facets);
+    get_facets(facets, n);
 
     for (const auto& s : facets)
     {
@@ -184,7 +184,7 @@ void merge_and_write_filtration(const char *fname, const std::vector<WeightedSim
             }
             else
             {
-                std::string st = Simplex(s.id).get_simplex_repr();
+                std::string st = Simplex(s.id).get_simplex_repr(num_vertices);
                 fprintf(f, "%f\t%s\n", s.value, st.c_str());
             }
         }

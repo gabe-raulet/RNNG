@@ -176,7 +176,7 @@ int main_mpi(int argc, char *argv[])
     for (const VoronoiCell<Atom>& cell : mycells)
     {
         complexes.emplace_back(cell, radius, maxdim);
-        complexes.back().build_filtration(distance, cover, leaf_size);
+        complexes.back().build_filtration(distance, num_points, cover, leaf_size);
     }
 
     mytime += MPI_Wtime();
