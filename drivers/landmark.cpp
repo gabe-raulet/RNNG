@@ -171,7 +171,7 @@ int main_mpi(int argc, char *argv[])
     mytime = -MPI_Wtime();
 
     dist_comps_start = distance.dist_comps;
-    VoronoiCell<Atom>::add_ghost_points(mycells, distance, radius, cover, leaf_size, comm);
+    VoronoiCell<Atom>::add_ghost_points_systolic(mycells, distance, radius, cover, leaf_size, comm);
     dist_comps_end = distance.dist_comps;
 
     mytime += MPI_Wtime();

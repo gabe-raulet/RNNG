@@ -99,10 +99,10 @@ class VoronoiCell : public PointContainer<Atom_>
         Index num_ghosts() const { return ghost_points.num_points(); }
 
         template <class Distance>
-        static void add_ghost_points(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
+        static void add_ghost_points_systolic(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
 
         template <class Distance>
-        static void add_ghost_points_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
+        static void add_ghost_points_systolic_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
 
         Point<Atom> ghost(Index i) const { return ghost_points[i]; }
         const PointContainer<Atom>& ghosts() const { return ghost_points; }

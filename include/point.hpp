@@ -759,7 +759,7 @@ void VoronoiDiagram<Atom_>::coalesce_cells(std::vector<Cell>& mycells, MPI_Comm 
 
 template <class Atom_>
 template <class Distance>
-void VoronoiCell<Atom_>::add_ghost_points(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
+void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
 {
     int myrank, nprocs;
     MPI_Comm_rank(comm, &myrank);
@@ -930,7 +930,7 @@ void VoronoiCell<Atom_>::add_ghost_points(std::vector<VoronoiCell>& cells, Dista
 
 template <class Atom_>
 template <class Distance>
-void VoronoiCell<Atom_>::add_ghost_points_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
+void VoronoiCell<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
 {
     int myrank, nprocs;
     MPI_Comm_rank(comm, &myrank);
