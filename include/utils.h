@@ -18,6 +18,7 @@
 #include <deque>
 #include <tuple>
 #include <type_traits>
+#include <algorithm>
 #include <mpi.h>
 
 using Index = int64_t;

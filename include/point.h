@@ -139,6 +139,11 @@ class VoronoiComplex : public PointContainer<Atom_>
 
         void write_filtration_file(const char *fname, bool use_ids=true) const;
 
+        Index num_simplices() const { return filtration.size(); }
+
+        typename std::vector<WeightedSimplex>::const_iterator begin() const { return filtration.begin(); }
+        typename std::vector<WeightedSimplex>::const_iterator end() const { return filtration.end(); }
+
     private:
 
         Real radius;

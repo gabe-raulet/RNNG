@@ -109,3 +109,88 @@ void Simplex::get_facet_ids(IndexVector& ids) const
         ids.push_back(s.getid());
     }
 }
+
+std::string Simplex::get_simplex_repr(Index n) const
+{
+    IndexVector verts = getverts(n);
+    Index size = verts.size();
+
+    std::stringstream ss;
+    ss << "<";
+
+    for (Index i = 0; i < size-1; ++i)
+    {
+        ss << verts[i] << ",";
+    }
+
+    ss << verts[size-1] << ">";
+    return ss.str();
+}
+
+void merge_and_write_filtration(const char *fname, const std::vector<WeightedSimplex>& mysimplices, Index num_vertices, bool use_ids, MPI_Comm comm)
+{
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_Datatype MPI_SIMPLEX_ENVELOPE;
+    MPI_Type_contiguous(sizeof(SimplexEnvelope), MPI_CHAR, &MPI_SIMPLEX_ENVELOPE);
+    MPI_Type_commit(&MPI_SIMPLEX_ENVELOPE);
+
+    int sendcount;
+    std::vector<int> recvcounts, rdispls;
+    std::vector<SimplexEnvelope> sendbuf, recvbuf;
+
+    sendbuf.reserve(mysimplices.size());
+
+    for (const WeightedSimplex& simplex : mysimplices)
+        sendbuf.emplace_back(simplex);
+
+    std::sort(sendbuf.begin(), sendbuf.end());
+    sendbuf.erase(std::unique(sendbuf.begin(), sendbuf.end()), sendbuf.end());
+
+    sendcount = sendbuf.size();
+
+    if (!myrank)
+    {
+        recvcounts.resize(nprocs);
+        rdispls.resize(nprocs);
+    }
+
+    MPI_Gather(&sendcount, 1, MPI_INT, recvcounts.data(), 1, MPI_INT, 0, comm);
+
+    if (!myrank)
+    {
+        std::exclusive_scan(recvcounts.begin(), recvcounts.end(), rdispls.begin(), 0);
+        recvbuf.resize(recvcounts.back() + rdispls.back());
+    }
+
+    MPI_Gatherv(sendbuf.data(), sendcount, MPI_SIMPLEX_ENVELOPE, recvbuf.data(), recvcounts.data(), rdispls.data(), MPI_SIMPLEX_ENVELOPE, 0, comm);
+
+    if (!myrank)
+    {
+        std::sort(recvbuf.begin(), recvbuf.end());
+        recvbuf.erase(std::unique(recvbuf.begin(), recvbuf.end()), recvbuf.end());
+
+        FILE *f;
+
+        f = fopen(fname, "w");
+
+        for (const auto& s : recvbuf)
+        {
+            if (use_ids)
+            {
+                fprintf(f, "%f\t%lld\n", s.value, s.id);
+            }
+            else
+            {
+                std::string st = Simplex(s.id).get_simplex_repr();
+                fprintf(f, "%f\t%s\n", s.value, st.c_str());
+            }
+        }
+
+        fclose(f);
+    }
+
+    MPI_Type_free(&MPI_SIMPLEX_ENVELOPE);
+}

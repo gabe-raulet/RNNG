@@ -21,6 +21,8 @@ struct Simplex
     void get_facet_ids(IndexVector& ids) const;
 
     Index id;
+
+    std::string get_simplex_repr(Index n = std::numeric_limits<Index>::max()) const;
 };
 
 struct WeightedSimplex : public Simplex
@@ -36,6 +38,22 @@ struct WeightedSimplex : public Simplex
     Real value;
     bool interior;
 };
+
+struct SimplexEnvelope
+{
+    Index id;
+    Real value;
+
+    SimplexEnvelope() {}
+    SimplexEnvelope(Index id, Real value) : id(id), value(value) {}
+    SimplexEnvelope(const WeightedSimplex& simplex) : id(simplex.getid()), value(simplex.getvalue()) {}
+
+    friend bool operator<(const SimplexEnvelope& lhs, const SimplexEnvelope& rhs) { return std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id); }
+    friend bool operator==(const SimplexEnvelope& lhs, const SimplexEnvelope& rhs) { return (lhs.id == rhs.id); }
+    friend bool operator!=(const SimplexEnvelope& lhs, const SimplexEnvelope& rhs) { return (lhs.id != rhs.id); }
+};
+
+void merge_and_write_filtration(const char *fname, const std::vector<WeightedSimplex>& mysimplices, Index num_vertices, bool use_ids, MPI_Comm comm);
 
 #include "simplex.hpp"
 

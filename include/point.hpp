@@ -815,7 +815,6 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<Cell>& cells, 
         for (Index i = 0; i < cell_point_count; ++i)
         {
             Point<Atom> p = cell[i];
-            /* sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_centers[i]); */
             sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_center(i));
             sendbuf_atoms.insert(sendbuf_atoms.end(), p.begin(), p.end());
         }
@@ -839,7 +838,6 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<Cell>& cells, 
 
     for (Index cell_index = 0; cell_index < my_assigned_cells; ++cell_index)
     {
-        /* treeids_set[cell_index].insert(cells[cell_index].ids.begin(), cells[cell_index].ids.end()); */
         treeids_set[cell_index].insert(cells[cell_index].ids_begin(), cells[cell_index].ids_end());
     }
 
@@ -1279,20 +1277,7 @@ void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_id
         }
         else
         {
-            IndexVector verts = s.getverts();
-            Index n = verts.size();
-
-            std::stringstream ss;
-            ss << "<";
-
-            for (Index i = 0; i < n-1; ++i)
-            {
-                ss << verts[i] << ",";
-            }
-
-            ss << verts[n-1] << ">";
-
-            std::string st = ss.str();
+            std::string st = s.get_simplex_repr();
             fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
         }
     }

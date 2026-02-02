@@ -28,6 +28,7 @@ Index num_centers = 1;
 Index maxdim = 3;
 int rng_seed = -1;
 int verbosity = 1;
+bool use_ids = true;
 
 template <class Atom>
 struct L2Distance
@@ -200,7 +201,7 @@ int main_mpi(int argc, char *argv[])
             std::stringstream ss;
             ss << outfile << ".rank" << myrank << ".cell" << i << ".txt";
             std::string s = ss.str();
-            complexes[i].write_filtration_file(s.c_str());
+            complexes[i].write_filtration_file(s.c_str(), use_ids);
         }
 
         mytime += MPI_Wtime();
@@ -216,6 +217,42 @@ int main_mpi(int argc, char *argv[])
     MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
     if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
     fflush(stderr);
+
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
+
+        std::stringstream ss;
+        ss << outfile << ".txt";
+        std::string s = ss.str();
+
+        std::vector<WeightedSimplex> mysimplices;
+        Index num_simplices = 0;
+
+        for (const VoronoiComplex<Atom>& vcomplex : complexes)
+        {
+            num_simplices += vcomplex.num_simplices();
+        }
+
+        mysimplices.reserve(num_simplices);
+
+        for (const VoronoiComplex<Atom>& vcomplex : complexes)
+        {
+            mysimplices.insert(mysimplices.end(), vcomplex.begin(), vcomplex.end());
+        }
+
+        merge_and_write_filtration(s.c_str(), mysimplices, num_points, use_ids, comm);
+
+        mytime += MPI_Wtime();
+
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) printf("[time=%.3f] wrote merged simplices to '%s'\n", time, s.c_str());
+            fflush(stdout);
+        }
+    }
 
     return 0;
 }
@@ -237,6 +274,7 @@ void parse_cmdline(int argc, char *argv[])
             fprintf(stderr, "         -d INT   maximum dimension [%lld]\n", maxdim);
             fprintf(stderr, "         -o FILE  output edge file\n");
             fprintf(stderr, "         -s INT   random number seed\n");
+            fprintf(stderr, "         -V       print simplices\n");
             fprintf(stderr, "         -F       fix number of centers\n");
             fprintf(stderr, "         -h       help message\n");
         }
@@ -246,7 +284,7 @@ void parse_cmdline(int argc, char *argv[])
     };
 
     int c;
-    while ((c = getopt(argc, argv, "i:r:m:c:l:v:o:s:FD:d:h")) >= 0)
+    while ((c = getopt(argc, argv, "i:r:m:c:l:v:o:s:FD:d:Vh")) >= 0)
     {
         if      (c == 'i') infile = optarg;
         else if (c == 'r') radius = atof(optarg);
@@ -259,6 +297,7 @@ void parse_cmdline(int argc, char *argv[])
         else if (c == 's') rng_seed = atoi(optarg);
         else if (c == 'D') metric = optarg;
         else if (c == 'd') maxdim = atoi(optarg);
+        else if (c == 'V') use_ids = false;
         else if (c == 'h') usage(0, myrank == 0);
     }
 
