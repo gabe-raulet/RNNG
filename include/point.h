@@ -84,7 +84,19 @@ class PointContainer
 
         inline const Atom* mem(Index i) const { return &data[offsets[i]]; }
         inline Index size(Index i) const { return offsets[i+1]-offsets[i]; }
-        inline Index id(Index i) const { return ids[i]; }
+        inline Index id(Index i) const
+        {
+
+            if (!(i >= 0 && i < ids.size()))
+            {
+                printf("assertion error will be on i=%lld [ids.size()=%llu]\n", i, ids.size());
+                fflush(stdout);
+            }
+
+            assert((i >= 0 && i < ids.size()));
+
+            return ids[i];
+        }
 };
 
 template <class Atom_>

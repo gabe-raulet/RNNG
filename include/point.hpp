@@ -1213,6 +1213,8 @@ void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real cover, Ind
 
     for (auto& s : filtration)
     {
+        std::cout << s.get_simplex_repr() << std::endl;
+
         IndexVector verts = s.getverts();
 
         for (Index& v : verts)
