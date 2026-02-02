@@ -759,7 +759,7 @@ void VoronoiDiagram<Atom_>::coalesce_cells(std::vector<Cell>& mycells, MPI_Comm 
 
 template <class Atom_>
 template <class Distance>
-void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
+void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<Cell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const
 {
     int myrank, nprocs;
     MPI_Comm_rank(comm, &myrank);
@@ -793,7 +793,7 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cel
     Index my_assigned_points = 0;
     Index my_assigned_atoms = 0;
 
-    for (const VoronoiCell& cell : cells)
+    for (const Cell& cell : cells)
     {
         my_assigned_points += cell.num_points();
         my_assigned_atoms += cell.num_atoms();
@@ -808,14 +808,15 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cel
 
     std::vector<CoverTree> trees;
 
-    for (const VoronoiCell& cell : cells)
+    for (const Cell& cell : cells)
     {
         Index cell_point_count = cell.num_points();
 
         for (Index i = 0; i < cell_point_count; ++i)
         {
             Point<Atom> p = cell[i];
-            sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_centers[i]);
+            /* sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_centers[i]); */
+            sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_center(i));
             sendbuf_atoms.insert(sendbuf_atoms.end(), p.begin(), p.end());
         }
 
@@ -838,7 +839,8 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cel
 
     for (Index cell_index = 0; cell_index < my_assigned_cells; ++cell_index)
     {
-        treeids_set[cell_index].insert(cells[cell_index].ids.begin(), cells[cell_index].ids.end());
+        /* treeids_set[cell_index].insert(cells[cell_index].ids.begin(), cells[cell_index].ids.end()); */
+        treeids_set[cell_index].insert(cells[cell_index].ids_begin(), cells[cell_index].ids_end());
     }
 
     CoverTree mycentertree(cover, 1);
@@ -930,7 +932,7 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCell>& cel
 
 template <class Atom_>
 template <class Distance>
-void VoronoiCell<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm)
+void VoronoiDiagram<Atom_>::add_ghost_points_systolic_rips(std::vector<Cell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const
 {
     int myrank, nprocs;
     MPI_Comm_rank(comm, &myrank);
@@ -967,7 +969,7 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCell>
     Index my_assigned_points = 0;
     Index my_assigned_atoms = 0;
 
-    for (const VoronoiCell& cell : cells)
+    for (const Cell& cell : cells)
     {
         my_assigned_points += cell.num_points();
         my_assigned_atoms += cell.num_atoms();
@@ -983,14 +985,14 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCell>
 
     std::vector<CoverTree> trees;
 
-    for (const VoronoiCell& cell : cells)
+    for (const Cell& cell : cells)
     {
         Index cell_point_count = cell.num_points();
 
         for (Index i = 0; i < cell_point_count; ++i)
         {
             Point<Atom> p = cell[i];
-            sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_centers[i]);
+            sendbuf_envs.emplace_back(p.id(), p.size(), cell.dist_to_center(i));
             sendbuf_atoms.insert(sendbuf_atoms.end(), p.begin(), p.end());
         }
 
@@ -1013,7 +1015,7 @@ void VoronoiCell<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCell>
 
     for (Index cell_index = 0; cell_index < my_assigned_cells; ++cell_index)
     {
-        treeids_set[cell_index].insert(cells[cell_index].ids.begin(), cells[cell_index].ids.end());
+        treeids_set[cell_index].insert(cells[cell_index].ids_begin(), cells[cell_index].ids_end());
     }
 
     CoverTree mycentertree(cover, 1);

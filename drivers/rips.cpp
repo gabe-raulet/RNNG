@@ -157,7 +157,7 @@ int main_mpi(int argc, char *argv[])
 
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
-    VoronoiCell<Atom>::add_ghost_points_systolic_rips(mycells, distance, radius, cover, leaf_size, comm);
+    diagram.add_ghost_points_systolic_rips(mycells, distance, radius, cover, leaf_size, comm);
     mytime += MPI_Wtime();
 
     if (verbosity >= 1)

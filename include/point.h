@@ -70,6 +70,10 @@ class PointContainer
 
         void push_back(const Point<Atom>& p);
 
+        typename IndexVector::const_iterator ids_begin() const { return ids.begin(); }
+        typename IndexVector::const_iterator ids_end() const { return ids.end(); }
+
+
     protected:
 
         AtomVector data;
@@ -98,17 +102,14 @@ class VoronoiCell : public PointContainer<Atom_>
         Index id() const { return cell_index; }
         Index num_ghosts() const { return ghost_points.num_points(); }
 
-        template <class Distance>
-        static void add_ghost_points_systolic(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
-
-        template <class Distance>
-        static void add_ghost_points_systolic_rips(std::vector<VoronoiCell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm);
-
         Point<Atom> ghost(Index i) const { return ghost_points[i]; }
+        Real dist_to_center(Index i) const { return dist_to_centers[i]; }
+
         const PointContainer<Atom>& ghosts() const { return ghost_points; }
         const BoolVector& interiors() const { return interior; }
 
         void set_interior(Index offset) { interior[offset] = true; }
+
 
     protected:
 
@@ -164,6 +165,12 @@ class VoronoiDiagram : public PointContainer<Atom_>
         VoronoiDiagram(const PointContainer<Atom>& points, const PointContainer<Atom>& centers, Distance& distance);
 
         void coalesce_cells(std::vector<Cell>& mycells, MPI_Comm comm) const;
+
+        template <class Distance>
+        void add_ghost_points_systolic(std::vector<Cell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const;
+
+        template <class Distance>
+        void add_ghost_points_systolic_rips(std::vector<Cell>& cells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const;
 
     private:
 
